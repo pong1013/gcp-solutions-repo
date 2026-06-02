@@ -1,0 +1,49 @@
+# Terraform local state
+.terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+
+# Secrets and local env
+.env
+.env.*
+*.key
+*.pem
+
+# Build artifacts
+target/
+dist/
+*.log
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Directories to ignore
+cheapest/
+complete/
+
+# IDE and editor files
+Practice.md
+
+# Documentation
+**/docs/**
+
+# Terraform local state and cache
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/terraform.tfstate.*
+*.tfvars
+*.tfvars.json
+
+# Local credentials / secrets
+.env
+*.env
+*credentials*
+*secret*
+*key*.json
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

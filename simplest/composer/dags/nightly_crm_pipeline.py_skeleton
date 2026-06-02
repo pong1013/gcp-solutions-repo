@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+
+from airflow import DAG
+from airflow.operators.empty import EmptyOperator
+
+
+DEFAULT_ARGS = {
+    "owner": "data-engineering",
+    "depends_on_past": False,
+    "retries": 1,
+    "retry_delay": timedelta(minutes=5),
+}
+
+
+with DAG(
+    dag_id="nightly_crm_pipeline",
+    description="Orchestrates nightly CRM CSV and Oracle ingestion for the simplest GCP solution.",
+    default_args=DEFAULT_ARGS,
+    start_date=datetime(2026, 5, 26),
+    schedule_interval=None,
+    catchup=False,
+    max_active_runs=1,
+    tags=["crm", "simplest", "lab"],
+) as dag:
+    check_crm_files = EmptyOperator(
+        task_id="check_crm_files",
+    )
+
+    run_oracle_user_raw_pipeline = EmptyOperator(
+        task_id="run_oracle_user_raw_pipeline",
+    )
+
+    run_crm_sales_pipeline = EmptyOperator(
+        task_id="run_crm_sales_pipeline",
+    )
+
+    run_crm_support_pipeline = EmptyOperator(
+        task_id="run_crm_support_pipeline",
+    )
+
+    run_crm_campaign_events_pipeline = EmptyOperator(
+        task_id="run_crm_campaign_events_pipeline",
+    )
+
+    run_crm_partner_leads_pipeline = EmptyOperator(
+        task_id="run_crm_partner_leads_pipeline",
+    )
+
+    validate_raw_counts = EmptyOperator(
+        task_id="validate_raw_counts",
+    )
+
+    archive_source_files = EmptyOperator(
+        task_id="archive_source_files",
+    )
+
+    crm_ingestion_tasks = [
+        run_crm_sales_pipeline,
+        run_crm_support_pipeline,
+        run_crm_campaign_events_pipeline,
+        run_crm_partner_leads_pipeline,
+    ]
+
+    check_crm_files >> run_oracle_user_raw_pipeline >> crm_ingestion_tasks
+    crm_ingestion_tasks >> validate_raw_counts >> archive_source_files

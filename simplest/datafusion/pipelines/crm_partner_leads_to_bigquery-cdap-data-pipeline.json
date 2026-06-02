@@ -1,0 +1,129 @@
+{
+    "artifact": {
+        "name": "cdap-data-pipeline",
+        "version": "6.11.1",
+        "scope": "SYSTEM",
+        "label": "Data Pipeline - Batch"
+    },
+    "description": "",
+    "name": "crm_partner_leads_to_bigquery",
+    "change": {
+        "description": ""
+    },
+    "parentVersion": "",
+    "config": {
+        "resources": {
+            "memoryMB": 2048,
+            "virtualCores": 1
+        },
+        "driverResources": {
+            "memoryMB": 2048,
+            "virtualCores": 1
+        },
+        "connections": [
+            {
+                "from": "gcs_crm_partner_leads",
+                "to": "bq_crm_partner_leads"
+            }
+        ],
+        "comments": [],
+        "postActions": [],
+        "properties": {},
+        "processTimingEnabled": true,
+        "stageLoggingEnabled": false,
+        "stages": [
+            {
+                "name": "gcs_crm_partner_leads",
+                "plugin": {
+                    "name": "GCSFile",
+                    "type": "batchsource",
+                    "label": "gcs_crm_partner_leads",
+                    "artifact": {
+                        "name": "google-cloud",
+                        "version": "0.24.1",
+                        "scope": "SYSTEM"
+                    },
+                    "properties": {
+                        "useConnection": "false",
+                        "project": "auto-detect",
+                        "serviceAccountType": "filePath",
+                        "serviceFilePath": "auto-detect",
+                        "referenceName": "gcs_crm_partner_leads",
+                        "path": "gs://simplest-497710-raw-crm/crm/2026-05-26/crm_new_partner_leads_2026_05_26.csv",
+                        "format": "csv",
+                        "sampleSize": "1000",
+                        "filenameOnly": "false",
+                        "recursive": "false",
+                        "ignoreNonExistingFolders": "false",
+                        "encrypted": "false",
+                        "fileEncoding": "UTF-8",
+                        "schema": "{\"type\":\"record\",\"name\":\"text\",\"fields\":[{\"name\":\"external_lead_id\",\"type\":\"string\"},{\"name\":\"email\",\"type\":\"string\"},{\"name\":\"partner_name\",\"type\":\"string\"},{\"name\":\"lead_score\",\"type\":\"int\"},{\"name\":\"utm_source\",\"type\":\"string\"},{\"name\":\"created_at\",\"type\":\"string\"},{\"name\":\"opt_in\",\"type\":\"boolean\"}]}",
+                        "enableQuotedValues": "false",
+                        "skipHeader": "true"
+                    }
+                },
+                "outputSchema": [
+                    {
+                        "name": "etlSchemaBody",
+                        "schema": "{\"type\":\"record\",\"name\":\"text\",\"fields\":[{\"name\":\"external_lead_id\",\"type\":\"string\"},{\"name\":\"email\",\"type\":\"string\"},{\"name\":\"partner_name\",\"type\":\"string\"},{\"name\":\"lead_score\",\"type\":\"int\"},{\"name\":\"utm_source\",\"type\":\"string\"},{\"name\":\"created_at\",\"type\":\"string\"},{\"name\":\"opt_in\",\"type\":\"boolean\"}]}"
+                    }
+                ],
+                "id": "gcs_crm_partner_leads"
+            },
+            {
+                "name": "bq_crm_partner_leads",
+                "plugin": {
+                    "name": "BigQueryTable",
+                    "type": "batchsink",
+                    "label": "bq_crm_partner_leads",
+                    "artifact": {
+                        "name": "google-cloud",
+                        "version": "0.24.1",
+                        "scope": "SYSTEM"
+                    },
+                    "properties": {
+                        "useConnection": "false",
+                        "project": "auto-detect",
+                        "serviceAccountType": "filePath",
+                        "serviceFilePath": "auto-detect",
+                        "referenceName": "bq_crm_partner_leads",
+                        "dataset": "raw",
+                        "table": "crm_new_partner_leads",
+                        "bucket": "simplest-497710-datafusion-temp",
+                        "operation": "insert",
+                        "truncateTable": "false",
+                        "allowSchemaRelaxation": "false",
+                        "readTimeout": "120",
+                        "location": "US",
+                        "createPartitionedTable": "false",
+                        "partitioningType": "TIME",
+                        "timePartitioningType": "DAY",
+                        "partitionFilterRequired": "false",
+                        "schema": "{\"type\":\"record\",\"name\":\"text\",\"fields\":[{\"name\":\"external_lead_id\",\"type\":\"string\"},{\"name\":\"email\",\"type\":\"string\"},{\"name\":\"partner_name\",\"type\":\"string\"},{\"name\":\"lead_score\",\"type\":\"int\"},{\"name\":\"utm_source\",\"type\":\"string\"},{\"name\":\"created_at\",\"type\":\"string\"},{\"name\":\"opt_in\",\"type\":\"boolean\"}]}"
+                    }
+                },
+                "outputSchema": [
+                    {
+                        "name": "etlSchemaBody",
+                        "schema": "{\"type\":\"record\",\"name\":\"text\",\"fields\":[{\"name\":\"external_lead_id\",\"type\":\"string\"},{\"name\":\"email\",\"type\":\"string\"},{\"name\":\"partner_name\",\"type\":\"string\"},{\"name\":\"lead_score\",\"type\":\"int\"},{\"name\":\"utm_source\",\"type\":\"string\"},{\"name\":\"created_at\",\"type\":\"string\"},{\"name\":\"opt_in\",\"type\":\"boolean\"}]}"
+                    }
+                ],
+                "inputSchema": [
+                    {
+                        "name": "gcs_crm_partner_leads",
+                        "schema": "{\"type\":\"record\",\"name\":\"text\",\"fields\":[{\"name\":\"external_lead_id\",\"type\":\"string\"},{\"name\":\"email\",\"type\":\"string\"},{\"name\":\"partner_name\",\"type\":\"string\"},{\"name\":\"lead_score\",\"type\":\"int\"},{\"name\":\"utm_source\",\"type\":\"string\"},{\"name\":\"created_at\",\"type\":\"string\"},{\"name\":\"opt_in\",\"type\":\"boolean\"}]}"
+                    }
+                ],
+                "id": "bq_crm_partner_leads"
+            }
+        ],
+        "schedule": "0 1 */1 * *",
+        "engine": "spark",
+        "numOfRecordsPreview": 100,
+        "rangeRecordsPreview": {
+            "min": 1,
+            "max": "5000"
+        },
+        "maxConcurrentRuns": 1
+    }
+}

@@ -1,0 +1,134 @@
+{
+    "artifact": {
+        "name": "cdap-data-pipeline",
+        "version": "6.11.1",
+        "scope": "SYSTEM"
+    },
+    "description": "Data Pipeline Application",
+    "name": "user_raw_pipeline",
+    "change": {
+        "description": ""
+    },
+    "parentVersion": "",
+    "config": {
+        "resources": {
+            "memoryMB": 2048,
+            "virtualCores": 1
+        },
+        "driverResources": {
+            "memoryMB": 2048,
+            "virtualCores": 1
+        },
+        "connections": [
+            {
+                "from": "oracle_user_raw",
+                "to": "bq_user_raw"
+            }
+        ],
+        "comments": [],
+        "postActions": [],
+        "properties": {},
+        "processTimingEnabled": true,
+        "stageLoggingEnabled": false,
+        "stages": [
+            {
+                "name": "oracle_user_raw",
+                "plugin": {
+                    "name": "Oracle",
+                    "type": "batchsource",
+                    "label": "oracle_user_raw",
+                    "artifact": {
+                        "name": "oracle-plugin",
+                        "version": "1.12.3",
+                        "scope": "SYSTEM"
+                    },
+                    "properties": {
+                        "useConnection": "false",
+                        "jdbcPluginName": "oracle",
+                        "host": "10.128.0.3",
+                        "port": "1521",
+                        "user": "APP",
+                        "password": "${ORACLE_PASSWORD}",
+                        "role": "normal",
+                        "transactionIsolationLevel": "TRANSACTION_SERIALIZABLE",
+                        "useSSL": "false",
+                        "treatAsOldTimestamp": "false",
+                        "treatPrecisionlessNumAsDeci": "false",
+                        "connectionType": "service",
+                        "database": "FREEPDB1",
+                        "referenceName": "oracle_user_raw",
+                        "importQuery": "SELECT\n  user_id,\n  email,\n  first_name,\n  last_name,\n  gender,\n  birth_date,\n  city,\n  country,\n  signup_date,\n  consent_email,\n  income_band,\n  last_login_at,\n  source_system,\n  updated_at\nFROM APP.user_raw",
+                        "numSplits": "1",
+                        "fetchSize": "1000",
+                        "defaultBatchValue": "10",
+                        "defaultRowPrefetch": "40",
+                        "schema": "{\"type\":\"record\",\"name\":\"outputSchema\",\"fields\":[{\"name\":\"USER_ID\",\"type\":\"string\"},{\"name\":\"EMAIL\",\"type\":[\"string\",\"null\"]},{\"name\":\"FIRST_NAME\",\"type\":[\"string\",\"null\"]},{\"name\":\"LAST_NAME\",\"type\":[\"string\",\"null\"]},{\"name\":\"GENDER\",\"type\":[\"string\",\"null\"]},{\"name\":\"BIRTH_DATE\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"CITY\",\"type\":[\"string\",\"null\"]},{\"name\":\"COUNTRY\",\"type\":[\"string\",\"null\"]},{\"name\":\"SIGNUP_DATE\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"CONSENT_EMAIL\",\"type\":[\"string\",\"null\"]},{\"name\":\"INCOME_BAND\",\"type\":[\"string\",\"null\"]},{\"name\":\"LAST_LOGIN_AT\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"SOURCE_SYSTEM\",\"type\":[\"string\",\"null\"]},{\"name\":\"UPDATED_AT\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]}]}"
+                    }
+                },
+                "outputSchema": [
+                    {
+                        "name": "etlSchemaBody",
+                        "schema": "{\"type\":\"record\",\"name\":\"outputSchema\",\"fields\":[{\"name\":\"USER_ID\",\"type\":\"string\"},{\"name\":\"EMAIL\",\"type\":[\"string\",\"null\"]},{\"name\":\"FIRST_NAME\",\"type\":[\"string\",\"null\"]},{\"name\":\"LAST_NAME\",\"type\":[\"string\",\"null\"]},{\"name\":\"GENDER\",\"type\":[\"string\",\"null\"]},{\"name\":\"BIRTH_DATE\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"CITY\",\"type\":[\"string\",\"null\"]},{\"name\":\"COUNTRY\",\"type\":[\"string\",\"null\"]},{\"name\":\"SIGNUP_DATE\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"CONSENT_EMAIL\",\"type\":[\"string\",\"null\"]},{\"name\":\"INCOME_BAND\",\"type\":[\"string\",\"null\"]},{\"name\":\"LAST_LOGIN_AT\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"SOURCE_SYSTEM\",\"type\":[\"string\",\"null\"]},{\"name\":\"UPDATED_AT\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]}]}"
+                    }
+                ],
+                "id": "oracle_user_raw"
+            },
+            {
+                "name": "bq_user_raw",
+                "plugin": {
+                    "name": "BigQueryTable",
+                    "type": "batchsink",
+                    "label": "bq_user_raw",
+                    "artifact": {
+                        "name": "google-cloud",
+                        "version": "0.24.1",
+                        "scope": "SYSTEM"
+                    },
+                    "properties": {
+                        "useConnection": "false",
+                        "project": "simplest-497710",
+                        "serviceAccountType": "filePath",
+                        "serviceFilePath": "auto-detect",
+                        "referenceName": "bq_user_raw",
+                        "dataset": "raw",
+                        "table": "user_raw",
+                        "operation": "insert",
+                        "truncateTable": "false",
+                        "allowSchemaRelaxation": "false",
+                        "readTimeout": "120",
+                        "location": "US",
+                        "createPartitionedTable": "false",
+                        "partitioningType": "TIME",
+                        "timePartitioningType": "DAY",
+                        "partitionFilterRequired": "false",
+                        "schema": "{\"type\":\"record\",\"name\":\"outputSchema\",\"fields\":[{\"name\":\"USER_ID\",\"type\":\"string\"},{\"name\":\"EMAIL\",\"type\":[\"string\",\"null\"]},{\"name\":\"FIRST_NAME\",\"type\":[\"string\",\"null\"]},{\"name\":\"LAST_NAME\",\"type\":[\"string\",\"null\"]},{\"name\":\"GENDER\",\"type\":[\"string\",\"null\"]},{\"name\":\"BIRTH_DATE\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"CITY\",\"type\":[\"string\",\"null\"]},{\"name\":\"COUNTRY\",\"type\":[\"string\",\"null\"]},{\"name\":\"SIGNUP_DATE\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"CONSENT_EMAIL\",\"type\":[\"string\",\"null\"]},{\"name\":\"INCOME_BAND\",\"type\":[\"string\",\"null\"]},{\"name\":\"LAST_LOGIN_AT\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"SOURCE_SYSTEM\",\"type\":[\"string\",\"null\"]},{\"name\":\"UPDATED_AT\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]}]}",
+                        "bucket": "simplest-497710-datafusion-temp"
+                    }
+                },
+                "outputSchema": [
+                    {
+                        "name": "etlSchemaBody",
+                        "schema": "{\"type\":\"record\",\"name\":\"outputSchema\",\"fields\":[{\"name\":\"USER_ID\",\"type\":\"string\"},{\"name\":\"EMAIL\",\"type\":[\"string\",\"null\"]},{\"name\":\"FIRST_NAME\",\"type\":[\"string\",\"null\"]},{\"name\":\"LAST_NAME\",\"type\":[\"string\",\"null\"]},{\"name\":\"GENDER\",\"type\":[\"string\",\"null\"]},{\"name\":\"BIRTH_DATE\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"CITY\",\"type\":[\"string\",\"null\"]},{\"name\":\"COUNTRY\",\"type\":[\"string\",\"null\"]},{\"name\":\"SIGNUP_DATE\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"CONSENT_EMAIL\",\"type\":[\"string\",\"null\"]},{\"name\":\"INCOME_BAND\",\"type\":[\"string\",\"null\"]},{\"name\":\"LAST_LOGIN_AT\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"SOURCE_SYSTEM\",\"type\":[\"string\",\"null\"]},{\"name\":\"UPDATED_AT\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]}]}"
+                    }
+                ],
+                "inputSchema": [
+                    {
+                        "name": "oracle_user_raw",
+                        "schema": "{\"type\":\"record\",\"name\":\"outputSchema\",\"fields\":[{\"name\":\"USER_ID\",\"type\":\"string\"},{\"name\":\"EMAIL\",\"type\":[\"string\",\"null\"]},{\"name\":\"FIRST_NAME\",\"type\":[\"string\",\"null\"]},{\"name\":\"LAST_NAME\",\"type\":[\"string\",\"null\"]},{\"name\":\"GENDER\",\"type\":[\"string\",\"null\"]},{\"name\":\"BIRTH_DATE\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"CITY\",\"type\":[\"string\",\"null\"]},{\"name\":\"COUNTRY\",\"type\":[\"string\",\"null\"]},{\"name\":\"SIGNUP_DATE\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"CONSENT_EMAIL\",\"type\":[\"string\",\"null\"]},{\"name\":\"INCOME_BAND\",\"type\":[\"string\",\"null\"]},{\"name\":\"LAST_LOGIN_AT\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]},{\"name\":\"SOURCE_SYSTEM\",\"type\":[\"string\",\"null\"]},{\"name\":\"UPDATED_AT\",\"type\":[{\"type\":\"string\",\"logicalType\":\"datetime\"},\"null\"]}]}"
+                    }
+                ],
+                "id": "bq_user_raw"
+            }
+        ],
+        "schedule": "0 1 */1 * *",
+        "engine": "spark",
+        "numOfRecordsPreview": 100,
+        "rangeRecordsPreview": {
+            "min": 1,
+            "max": "5000"
+        },
+        "description": "Data Pipeline Application",
+        "maxConcurrentRuns": 1
+    },
+    "version": "32734053-5d65-11f1-a231-ca3dd7bc8765"
+}
