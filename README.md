@@ -15,7 +15,7 @@
 - [Simplest Architecture Visual Guide](https://pong1013.github.io/gcp-solutions-repo/simplest/simplest-architecture-visual.html
 )：互動式 HTML，說明 simplest 架構、8 個實作步驟、每一步的目的與需求對應，以及整體優化後的結果。
 
-如果是在 GitHub repo 頁面直接點 `.html` 檔，GitHub 通常會顯示原始碼，不會像網頁一樣執行。要用網頁方式開啟，可以下載後本機開啟，或啟用 GitHub Pages 後從 Pages URL 進入。
+
 
 ## Layout
 
