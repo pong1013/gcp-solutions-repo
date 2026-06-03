@@ -11,6 +11,7 @@ locals {
     "iam.googleapis.com",
     "pubsub.googleapis.com",
     "secretmanager.googleapis.com",
+    "storagetransfer.googleapis.com",
   ])
 }
 

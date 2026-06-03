@@ -937,22 +937,22 @@
         outcome: "檔案狀態從一個不透明 folder 變成 raw、archive、rejected 三種明確狀態，後續 pipeline、audit 和 rerun 都有清楚入口。"
       },
       {
-        title: "上傳 CRM CSV",
-        short: "date prefix input",
+        title: "排程傳送 CRM CSV",
+        short: "scheduled transfer",
         phase: "Ingestion",
         status: "已實作 runbook",
-        diagram: "Step 2: CRM CSV upload into raw prefix",
+        diagram: "Step 2: Scheduled CRM transfer into raw prefix",
         nodes: ["crmCsv", "gcsRaw"],
         flows: ["csvToRaw"],
-        desc: "把四種 CRM CSV 上傳到 raw bucket 的日期 prefix，模擬原本 on-prem system 每晚產檔後送入雲端。",
+        desc: "用 Storage Transfer Service scheduled transfer，把 on-prem system 每晚產出的四種 CRM CSV 持續送到 raw bucket 日期 prefix。",
         bullets: [
           "四個來源檔包含 sales、support、campaign events、partner leads。",
           "GCS prefix 使用 `crm/2026-05-26/` 代表 lab run date。",
           "不同 CSV schema 對應客戶要求：new type of CRM data onboarding。",
-          "正式環境可由 cronjob、Storage Transfer 或受控 upload job 取代手動上傳。"
+          "正式環境主線是 Storage Transfer；`gcloud storage cp` 或 upload script 只作 lab bootstrap / emergency replay。"
         ],
         mapping: [
-          ["Nightly source delivery", "每天固定 prefix 讓 pipeline 可依 run date 讀取資料。"],
+          ["Nightly source delivery", "Storage Transfer 每晚把 on-prem dated folder 複製到固定 GCS prefix。"],
           ["New CRM formats", "每種 CSV 保留獨立 schema 與 Data Fusion pipeline，降低 onboarding 複雜度。"],
           ["Rerun by date", "同一天資料可透過 prefix 定位，必要時從 archive copy 回 raw 後重跑。"]
         ],
@@ -961,7 +961,7 @@
           ["Expected files", "composer/dags/nightly_crm_pipeline.py"],
           ["Pipeline exports", "datafusion/pipelines/*crm*_to_bigquery-cdap-data-pipeline.json"]
         ],
-        outcome: "CRM source files 已進入 GCP raw landing zone，後續 Data Fusion 可以用固定日期 prefix 讀取，Composer 也能先檢查四個必要檔案是否存在。"
+        outcome: "CRM source files 透過 managed transfer 進入 GCP raw landing zone，後續 Data Fusion 可以用固定日期 prefix 讀取，Composer 也能先檢查四個必要檔案是否存在。"
       },
       {
         title: "Oracle + Data Fusion",

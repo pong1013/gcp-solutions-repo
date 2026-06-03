@@ -14,7 +14,7 @@
 ## Implementation steps
 
 - [Step 1 - Create GCS Buckets](docs/step1-gcs-buckets.md)
-- [Step 2 - Upload CRM CSV To Raw Bucket](docs/step2-crm-upload.md)
+- [Step 2 - Configure Scheduled CRM Transfer To GCS](docs/step2-crm-upload.md)
 - [Step 3 - Oracle Ingestion With Cloud Data Fusion](docs/step3-oracle-datafusion.md)
 - [Step 4 - Create BigQuery Datasets And Tables](docs/step4-bigquery-datasets.md)
 - [Step 5 - Orchestrate Pipeline With Cloud Composer](docs/step5-composer-orchestration.md)
@@ -23,3 +23,5 @@
 - [Step 8 - Archive Source Files And Cleanup Old Data](docs/step8-archive-cleanup.md)
 
 Production 變更應透過 Pull Request review，再由 Cloud Build 或 CI/CD 部署。
+
+注意：Simplest production baseline 使用 Storage Transfer Service scheduled transfer，把 on-prem CRM CSV 持續送到 GCS raw bucket。`gcloud storage cp` 只用於 lab bootstrap 或 emergency replay，不代表正式 ongoing ingestion。
