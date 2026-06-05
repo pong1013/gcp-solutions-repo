@@ -1,0 +1,16 @@
+[
+  {"name": "user_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "email", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "first_name", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "last_name", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "gender", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "birth_date", "type": "DATE", "mode": "NULLABLE"},
+  {"name": "city", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "country", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "signup_date", "type": "DATE", "mode": "NULLABLE"},
+  {"name": "consent_email", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "income_band", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "last_login_at", "type": "TIMESTAMP", "mode": "NULLABLE"},
+  {"name": "source_system", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "updated_at", "type": "TIMESTAMP", "mode": "NULLABLE"}
+]

@@ -1,0 +1,8 @@
+[
+  {"name": "ticket_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "user_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "priority", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "status", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "category", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "csat_score", "type": "FLOAT", "mode": "NULLABLE"}
+]

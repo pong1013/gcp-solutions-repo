@@ -1,0 +1,10 @@
+[
+  {"name": "customer_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "user_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "deal_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "deal_stage", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "deal_amount", "type": "FLOAT", "mode": "NULLABLE"},
+  {"name": "currency", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "closed_date", "type": "DATE", "mode": "NULLABLE"},
+  {"name": "owner_region", "type": "STRING", "mode": "NULLABLE"}
+]

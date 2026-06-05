@@ -1,0 +1,9 @@
+[
+  {"name": "external_lead_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "email", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "partner_name", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "lead_score", "type": "INTEGER", "mode": "NULLABLE"},
+  {"name": "utm_source", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "created_at", "type": "TIMESTAMP", "mode": "NULLABLE"},
+  {"name": "opt_in", "type": "BOOL", "mode": "NULLABLE"}
+]

@@ -1,0 +1,8 @@
+[
+  {"name": "event_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "user_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "campaign_id", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "channel", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "event_type", "type": "STRING", "mode": "NULLABLE"},
+  {"name": "event_ts", "type": "TIMESTAMP", "mode": "NULLABLE"}
+]

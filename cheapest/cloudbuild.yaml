@@ -1,0 +1,43 @@
+substitutions:
+  _REGION: us-central1
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - id: terraform-fmt
+    name: hashicorp/terraform:1.10.5
+    dir: cheapest/terraform
+    entrypoint: sh
+    args:
+      - -c
+      - terraform fmt -check
+
+  - id: terraform-validate
+    name: hashicorp/terraform:1.10.5
+    dir: cheapest/terraform
+    entrypoint: sh
+    args:
+      - -c
+      - terraform init -backend=false && terraform validate
+
+  - id: salesforce-job-python-compile
+    name: python:3.12-slim
+    dir: cheapest/cloud-run/salesforce-job
+    entrypoint: python
+    args:
+      - -m
+      - py_compile
+      - main.py
+
+  - id: salesforce-job-docker-build
+    name: gcr.io/cloud-builders/docker
+    dir: cheapest/cloud-run/salesforce-job
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/cheapest-jobs/salesforce-job:latest
+      - .
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/cheapest-jobs/salesforce-job:latest

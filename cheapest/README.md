@@ -21,5 +21,6 @@
 - [Step 6 - Workflow Dashboard And Rerun Design](docs/step6-rerun-design.md)
 - [Step 7 - Cloud Run Jobs For Long Tasks And Salesforce](docs/step7-cloud-run-salesforce.md)
 - [Step 8 - Terraform, Cloud Build, And PR Review](docs/step8-template-deployment.md)
+- [Step 9 - CI/CD With Cloud Build And Terraform Remote State](docs/step9-cicd-cloud-build.md)
 
 Production 變更應透過 Pull Request review，再由 Cloud Build 或 CI/CD 部署。

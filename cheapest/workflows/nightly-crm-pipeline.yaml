@@ -1,0 +1,697 @@
+main:
+  params: [args]
+  steps:
+    - init_input:
+        assign:
+          - input: ${args}
+    - choose_input:
+        switch:
+          - condition: ${input == null}
+            next: init_default_values
+        next: init_arg_values
+    - init_default_values:
+        assign:
+          - project_id: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - region: "us-central1"
+          - bq_location: "US"
+          - run_date: ${text.substring(time.format(sys.now()), 0, 10)}
+          - step_name: "all"
+        next: choose_step
+    - init_arg_values:
+        assign:
+          - project_id: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - region: "us-central1"
+          - bq_location: "US"
+          - run_date: ${default(map.get(input, "run_date"), text.substring(time.format(sys.now()), 0, 10))}
+          - step_name: ${default(map.get(input, "step_name"), "all")}
+    - choose_step:
+        switch:
+          - condition: ${step_name == "all"}
+            next: run_all
+          - condition: ${step_name == "load_crm_csv"}
+            next: run_load_only
+          - condition: ${step_name == "run_transform_sql"}
+            next: run_transform_only
+          - condition: ${step_name == "run_quality_checks"}
+            next: run_quality_only
+          - condition: ${step_name == "push_salesforce"}
+            next: run_salesforce_only
+        next: unsupported_step
+    - unsupported_step:
+        raise: '${"Unsupported step_name: " + step_name}'
+
+    - run_all:
+        call: load_crm_csv_tables
+        args:
+          project_id: ${project_id}
+          run_date: ${run_date}
+          bq_location: ${bq_location}
+        result: load_result
+    - run_all_ensure_audit:
+        call: ensure_audit_tables
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+        result: audit_result
+    - run_all_transform:
+        call: run_transform_sql
+        args:
+          project_id: ${project_id}
+          run_date: ${run_date}
+          bq_location: ${bq_location}
+        result: transform_result
+    - run_all_quality:
+        call: run_quality_checks
+        args:
+          project_id: ${project_id}
+          run_date: ${run_date}
+          bq_location: ${bq_location}
+        result: quality_result
+    - run_all_salesforce:
+        call: push_salesforce
+        args:
+          project_id: ${project_id}
+          region: ${region}
+          run_date: ${run_date}
+        result: salesforce_result
+    - finish_all:
+        return:
+          status: "SUCCESS"
+          run_date: ${run_date}
+          step_name: ${step_name}
+          load_result: ${load_result}
+          audit_result: ${audit_result}
+          transform_result: ${transform_result}
+          quality_result: ${quality_result}
+          salesforce_result: ${salesforce_result}
+
+    - run_load_only:
+        call: load_crm_csv_tables
+        args:
+          project_id: ${project_id}
+          run_date: ${run_date}
+          bq_location: ${bq_location}
+        result: load_result
+    - finish_load_only:
+        return:
+          status: "SUCCESS"
+          run_date: ${run_date}
+          step_name: ${step_name}
+          load_result: ${load_result}
+
+    - run_transform_only:
+        call: ensure_audit_tables
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+        result: audit_result
+    - run_transform_only_execute:
+        call: run_transform_sql
+        args:
+          project_id: ${project_id}
+          run_date: ${run_date}
+          bq_location: ${bq_location}
+        result: transform_result
+    - finish_transform_only:
+        return:
+          status: "SUCCESS"
+          run_date: ${run_date}
+          step_name: ${step_name}
+          audit_result: ${audit_result}
+          transform_result: ${transform_result}
+
+    - run_quality_only:
+        call: ensure_audit_tables
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+        result: audit_result
+    - run_quality_only_execute:
+        call: run_quality_checks
+        args:
+          project_id: ${project_id}
+          run_date: ${run_date}
+          bq_location: ${bq_location}
+        result: quality_result
+    - finish_quality_only:
+        return:
+          status: "SUCCESS"
+          run_date: ${run_date}
+          step_name: ${step_name}
+          audit_result: ${audit_result}
+          quality_result: ${quality_result}
+
+    - run_salesforce_only:
+        call: ensure_audit_tables
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+        result: audit_result
+    - run_salesforce_only_execute:
+        call: push_salesforce
+        args:
+          project_id: ${project_id}
+          region: ${region}
+          run_date: ${run_date}
+        result: salesforce_result
+    - finish_salesforce_only:
+        return:
+          status: "SUCCESS"
+          run_date: ${run_date}
+          step_name: ${step_name}
+          audit_result: ${audit_result}
+          salesforce_result: ${salesforce_result}
+
+load_crm_csv_tables:
+  params: [project_id, run_date, bq_location]
+  steps:
+    - init_load:
+        assign:
+          - crm_prefix: ${"gs://" + project_id + "-crm-lake/raw/crm/" + run_date + "/"}
+    - log_load_start:
+        call: sys.log
+        args:
+          severity: INFO
+          text: ${"Loading CRM CSV files from " + crm_prefix}
+    - load_crm_sales:
+        call: submit_bigquery_load_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          source_uri: ${crm_prefix + "crm_sales_*.csv"}
+          table_id: "crm_sales"
+          schema_fields:
+            - name: customer_id
+              type: STRING
+            - name: user_id
+              type: STRING
+            - name: deal_id
+              type: STRING
+            - name: deal_stage
+              type: STRING
+            - name: deal_amount
+              type: FLOAT
+            - name: currency
+              type: STRING
+            - name: closed_date
+              type: DATE
+            - name: owner_region
+              type: STRING
+        result: crm_sales_job
+    - load_crm_support:
+        call: submit_bigquery_load_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          source_uri: ${crm_prefix + "crm_support_*.csv"}
+          table_id: "crm_support"
+          schema_fields:
+            - name: ticket_id
+              type: STRING
+            - name: user_id
+              type: STRING
+            - name: priority
+              type: STRING
+            - name: status
+              type: STRING
+            - name: category
+              type: STRING
+            - name: csat_score
+              type: FLOAT
+        result: crm_support_job
+    - load_crm_campaign_events:
+        call: submit_bigquery_load_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          source_uri: ${crm_prefix + "crm_campaign_events_*.csv"}
+          table_id: "crm_campaign_events"
+          schema_fields:
+            - name: event_id
+              type: STRING
+            - name: user_id
+              type: STRING
+            - name: campaign_id
+              type: STRING
+            - name: channel
+              type: STRING
+            - name: event_type
+              type: STRING
+            - name: event_ts
+              type: TIMESTAMP
+        result: crm_campaign_events_job
+    - load_crm_new_partner_leads:
+        call: submit_bigquery_load_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          source_uri: ${crm_prefix + "crm_new_partner_leads_*.csv"}
+          table_id: "crm_new_partner_leads"
+          schema_fields:
+            - name: external_lead_id
+              type: STRING
+            - name: email
+              type: STRING
+            - name: partner_name
+              type: STRING
+            - name: lead_score
+              type: INTEGER
+            - name: utm_source
+              type: STRING
+            - name: created_at
+              type: TIMESTAMP
+            - name: opt_in
+              type: BOOL
+        result: crm_new_partner_leads_job
+    - return_load_result:
+        return:
+          status: "LOADED"
+          run_date: ${run_date}
+          source_prefix: ${crm_prefix}
+          jobs:
+            crm_sales: ${crm_sales_job}
+            crm_support: ${crm_support_job}
+            crm_campaign_events: ${crm_campaign_events_job}
+            crm_new_partner_leads: ${crm_new_partner_leads_job}
+
+submit_bigquery_load_job:
+  params: [project_id, bq_location, source_uri, table_id, schema_fields]
+  steps:
+    - submit_load:
+        call: googleapis.bigquery.v2.jobs.insert
+        args:
+          projectId: ${project_id}
+          body:
+            jobReference:
+              projectId: ${project_id}
+              location: ${bq_location}
+            configuration:
+              labels:
+                app: crm_migration
+                solution: cheapest
+                step: load_crm_csv
+              load:
+                sourceUris:
+                  - ${source_uri}
+                destinationTable:
+                  projectId: ${project_id}
+                  datasetId: raw
+                  tableId: ${table_id}
+                schema:
+                  fields: ${schema_fields}
+                sourceFormat: CSV
+                skipLeadingRows: 1
+                fieldDelimiter: ","
+                encoding: UTF-8
+                createDisposition: CREATE_IF_NEEDED
+                writeDisposition: WRITE_TRUNCATE
+        result: load_job
+    - wait_load:
+        call: wait_bigquery_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          job_id: ${load_job.jobReference.jobId}
+        result: wait_result
+    - return_load_job:
+        return: ${wait_result}
+
+ensure_audit_tables:
+  params: [project_id, bq_location]
+  steps:
+    - create_pipeline_step_status:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "ensure_audit_tables"
+          query: |
+            CREATE TABLE IF NOT EXISTS `cheapest-497709.audit.pipeline_step_status` (
+              run_date DATE,
+              execution_id STRING,
+              step_name STRING,
+              status STRING,
+              started_at TIMESTAMP,
+              finished_at TIMESTAMP,
+              error_message STRING,
+              rerun_of_execution_id STRING
+            );
+        result: pipeline_step_status_job
+    - create_quality_check_results:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "ensure_audit_tables"
+          query: |
+            CREATE TABLE IF NOT EXISTS `cheapest-497709.audit.quality_check_results` (
+              run_date DATE,
+              execution_id STRING,
+              check_name STRING,
+              status STRING,
+              metric_value FLOAT64,
+              threshold_value FLOAT64,
+              checked_at TIMESTAMP,
+              details STRING
+            );
+        result: quality_check_results_job
+    - return_ensure:
+        return:
+          status: "AUDIT_TABLES_READY"
+          pipeline_step_status_job: ${pipeline_step_status_job}
+          quality_check_results_job: ${quality_check_results_job}
+
+run_transform_sql:
+  params: [project_id, run_date, bq_location]
+  steps:
+    - create_sales_clean:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "run_transform_sql"
+          query: |
+            CREATE OR REPLACE TABLE `cheapest-497709.staging.crm_sales_clean` AS
+            SELECT
+              customer_id,
+              user_id,
+              deal_id,
+              UPPER(TRIM(deal_stage)) AS deal_stage,
+              IFNULL(deal_amount, 0) AS deal_amount,
+              currency,
+              closed_date,
+              owner_region
+            FROM `cheapest-497709.raw.crm_sales`
+            WHERE user_id IS NOT NULL;
+        result: sales_clean_job
+    - create_support_clean:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "run_transform_sql"
+          query: |
+            CREATE OR REPLACE TABLE `cheapest-497709.staging.crm_support_clean` AS
+            SELECT
+              ticket_id,
+              user_id,
+              UPPER(TRIM(priority)) AS priority,
+              UPPER(TRIM(status)) AS status,
+              category,
+              csat_score
+            FROM `cheapest-497709.raw.crm_support`
+            WHERE user_id IS NOT NULL;
+        result: support_clean_job
+    - create_campaign_events_clean:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "run_transform_sql"
+          query: |
+            CREATE OR REPLACE TABLE `cheapest-497709.staging.crm_campaign_events_clean` AS
+            SELECT
+              event_id,
+              user_id,
+              campaign_id,
+              channel,
+              event_type,
+              event_ts
+            FROM `cheapest-497709.raw.crm_campaign_events`
+            WHERE user_id IS NOT NULL
+              AND campaign_id IS NOT NULL;
+        result: campaign_events_clean_job
+    - create_user_360:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "run_transform_sql"
+          query: |
+            CREATE OR REPLACE TABLE `cheapest-497709.curated.user_360` AS
+            SELECT
+              u.USER_ID AS user_id,
+              ANY_VALUE(u.EMAIL) AS email,
+              ANY_VALUE(u.COUNTRY) AS country,
+              COUNT(DISTINCT s.deal_id) AS sales_deal_count,
+              SUM(IFNULL(s.deal_amount, 0)) AS total_deal_amount,
+              COUNT(DISTINCT sup.ticket_id) AS support_ticket_count,
+              AVG(sup.csat_score) AS avg_csat_score
+            FROM `cheapest-497709.raw.APP_USER_RAW` u
+            LEFT JOIN `cheapest-497709.staging.crm_sales_clean` s
+              ON u.USER_ID = s.user_id
+            LEFT JOIN `cheapest-497709.staging.crm_support_clean` sup
+              ON u.USER_ID = sup.user_id
+            GROUP BY u.USER_ID;
+        result: user_360_job
+    - create_salesforce_audience:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "run_transform_sql"
+          query: |
+            CREATE OR REPLACE TABLE `cheapest-497709.mart.salesforce_campaign_audience` AS
+            SELECT
+              CONCAT('cmp_', FORMAT_DATE('%Y%m%d', CURRENT_DATE())) AS campaign_id,
+              u.user_id,
+              u.email,
+              CURRENT_DATE() AS run_date,
+              'high_value_or_support_followup' AS segment_name,
+              CURRENT_TIMESTAMP() AS selected_at
+            FROM `cheapest-497709.curated.user_360` u
+            WHERE u.email IS NOT NULL
+              AND (u.total_deal_amount > 0 OR u.support_ticket_count > 0);
+        result: audience_job
+    - write_transform_audit:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "run_transform_sql"
+          query: |
+            INSERT INTO `cheapest-497709.audit.pipeline_step_status`
+              (run_date, execution_id, step_name, status, started_at, finished_at, error_message, rerun_of_execution_id)
+            VALUES
+              (CURRENT_DATE(), GENERATE_UUID(), 'run_transform_sql', 'SUCCESS', CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), NULL, NULL);
+        result: transform_audit_job
+    - return_transform:
+        return:
+          status: "TRANSFORMED"
+          sales_clean_job: ${sales_clean_job}
+          support_clean_job: ${support_clean_job}
+          campaign_events_clean_job: ${campaign_events_clean_job}
+          user_360_job: ${user_360_job}
+          audience_job: ${audience_job}
+          audit_job: ${transform_audit_job}
+
+run_quality_checks:
+  params: [project_id, run_date, bq_location]
+  steps:
+    - clear_previous_quality_results:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "run_quality_checks"
+          query: |
+            DELETE FROM `cheapest-497709.audit.quality_check_results`
+            WHERE run_date = CURRENT_DATE()
+              AND check_name IN (
+                'salesforce_audience_row_count',
+                'salesforce_audience_duplicate_keys'
+              );
+        result: clear_quality_job
+    - check_audience_row_count:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "run_quality_checks"
+          query: |
+            INSERT INTO `cheapest-497709.audit.quality_check_results`
+              (run_date, execution_id, check_name, status, metric_value, threshold_value, checked_at, details)
+            SELECT
+              CURRENT_DATE(),
+              GENERATE_UUID(),
+              'salesforce_audience_row_count',
+              IF(COUNT(*) > 0, 'PASS', 'FAIL'),
+              COUNT(*),
+              1,
+              CURRENT_TIMESTAMP(),
+              'mart.salesforce_campaign_audience must have at least one row'
+            FROM `cheapest-497709.mart.salesforce_campaign_audience`;
+        result: row_count_job
+    - check_duplicate_keys:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "run_quality_checks"
+          query: |
+            INSERT INTO `cheapest-497709.audit.quality_check_results`
+              (run_date, execution_id, check_name, status, metric_value, threshold_value, checked_at, details)
+            SELECT
+              CURRENT_DATE(),
+              GENERATE_UUID(),
+              'salesforce_audience_duplicate_keys',
+              IF(COUNT(*) = 0, 'PASS', 'FAIL'),
+              COUNT(*),
+              0,
+              CURRENT_TIMESTAMP(),
+              'campaign_id + user_id + run_date must be unique'
+            FROM (
+              SELECT campaign_id, user_id, run_date, COUNT(*) AS c
+              FROM `cheapest-497709.mart.salesforce_campaign_audience`
+              GROUP BY campaign_id, user_id, run_date
+              HAVING c > 1
+            );
+        result: duplicate_keys_job
+    - fail_if_quality_failed:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "run_quality_checks"
+          query: |
+            ASSERT (
+              SELECT COUNT(*)
+              FROM `cheapest-497709.audit.quality_check_results`
+              WHERE run_date = CURRENT_DATE()
+                AND status = 'FAIL'
+            ) = 0 AS 'Quality checks failed';
+        result: assert_quality_job
+    - write_quality_audit:
+        call: submit_bigquery_query_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          step_label: "run_quality_checks"
+          query: |
+            INSERT INTO `cheapest-497709.audit.pipeline_step_status`
+              (run_date, execution_id, step_name, status, started_at, finished_at, error_message, rerun_of_execution_id)
+            VALUES
+              (CURRENT_DATE(), GENERATE_UUID(), 'run_quality_checks', 'SUCCESS', CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), NULL, NULL);
+        result: quality_audit_job
+    - return_quality:
+        return:
+          status: "QUALITY_PASSED"
+          clear_quality_job: ${clear_quality_job}
+          row_count_job: ${row_count_job}
+          duplicate_keys_job: ${duplicate_keys_job}
+          assert_quality_job: ${assert_quality_job}
+          audit_job: ${quality_audit_job}
+
+push_salesforce:
+  params: [project_id, region, run_date]
+  steps:
+    - run_job:
+        call: googleapis.run.v2.projects.locations.jobs.run
+        args:
+          name: ${"projects/" + project_id + "/locations/" + region + "/jobs/salesforce-campaign-push"}
+          body:
+            overrides:
+              containerOverrides:
+                - env:
+                    - name: RUN_DATE
+                      value: ${run_date}
+        result: run_operation
+    - wait_run:
+        call: wait_cloud_run_operation
+        args:
+          operation_name: ${run_operation.name}
+        result: operation_result
+    - return_salesforce:
+        return:
+          status: "SALESFORCE_JOB_SUBMITTED"
+          operation: ${operation_result.name}
+
+submit_bigquery_query_job:
+  params: [project_id, bq_location, step_label, query]
+  steps:
+    - submit_query:
+        call: googleapis.bigquery.v2.jobs.insert
+        args:
+          projectId: ${project_id}
+          body:
+            jobReference:
+              projectId: ${project_id}
+              location: ${bq_location}
+            configuration:
+              labels:
+                app: crm_migration
+                solution: cheapest
+                step: ${step_label}
+              query:
+                query: ${query}
+                useLegacySql: false
+        result: query_job
+    - wait_query:
+        call: wait_bigquery_job
+        args:
+          project_id: ${project_id}
+          bq_location: ${bq_location}
+          job_id: ${query_job.jobReference.jobId}
+        result: wait_result
+    - return_query_job:
+        return: ${wait_result}
+
+wait_bigquery_job:
+  params: [project_id, bq_location, job_id]
+  steps:
+    - get_job:
+        call: googleapis.bigquery.v2.jobs.get
+        args:
+          projectId: ${project_id}
+          jobId: ${job_id}
+          location: ${bq_location}
+        result: job
+    - check_done:
+        switch:
+          - condition: ${job.status.state == "DONE"}
+            next: check_error
+        next: sleep_before_retry
+    - sleep_before_retry:
+        call: sys.sleep
+        args:
+          seconds: 5
+        next: get_job
+    - check_error:
+        switch:
+          - condition: ${map.get(job.status, "errorResult") != null}
+            next: raise_job_error
+        next: return_job
+    - raise_job_error:
+        raise: ${json.encode(job.status)}
+    - return_job:
+        return:
+          job_id: ${job_id}
+          state: ${job.status.state}
+
+wait_cloud_run_operation:
+  params: [operation_name]
+  steps:
+    - get_operation:
+        call: googleapis.run.v2.projects.locations.operations.get
+        args:
+          name: ${operation_name}
+        result: operation
+    - check_done:
+        switch:
+          - condition: ${operation.done == true}
+            next: check_error
+        next: sleep_before_retry
+    - sleep_before_retry:
+        call: sys.sleep
+        args:
+          seconds: 5
+        next: get_operation
+    - check_error:
+        switch:
+          - condition: ${map.get(operation, "error") != null}
+            next: raise_operation_error
+        next: return_operation
+    - raise_operation_error:
+        raise: ${json.encode(operation.error)}
+    - return_operation:
+        return: ${operation}
