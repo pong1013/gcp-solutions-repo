@@ -1,0 +1,1216 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cheapest CRM GCP Architecture Visual Guide</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1d2430;
+      --muted: #667085;
+      --paper: #f6f7fb;
+      --panel: #ffffff;
+      --line: #d8dee8;
+      --nav: #202734;
+      --blue: #2f6fed;
+      --cyan: #087d8f;
+      --green: #21825c;
+      --amber: #b66500;
+      --red: #bf3b3b;
+      --violet: #7256d8;
+      --slate: #536579;
+      --shadow: 0 14px 38px rgba(29, 36, 48, 0.11);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    code {
+      color: #22324a;
+      background: #f1f4f8;
+      border: 1px solid #e0e6ef;
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-size: 0.92em;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 292px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: var(--nav);
+      color: #ffffff;
+      padding: 22px 18px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+    }
+
+    .brand {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+
+    .brand small {
+      color: #b9c3d4;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .progress {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      overflow: hidden;
+      margin: 14px 0 24px;
+    }
+
+    .progress span {
+      display: block;
+      width: 11.11%;
+      height: 100%;
+      background: #7cc7ff;
+      transition: width 220ms ease;
+    }
+
+    .steps {
+      display: grid;
+      gap: 8px;
+    }
+
+    .step-btn {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: #eaf0f8;
+      border-radius: var(--radius);
+      padding: 12px;
+      text-align: left;
+      cursor: pointer;
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      align-items: start;
+      transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+    }
+
+    .step-btn:hover,
+    .step-btn:focus-visible {
+      background: rgba(255, 255, 255, 0.12);
+      outline: none;
+    }
+
+    .step-btn.active {
+      background: #ffffff;
+      color: #1d2430;
+      border-color: #ffffff;
+      transform: translateX(2px);
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.14);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .step-btn.active .step-num {
+      background: var(--green);
+      color: #ffffff;
+    }
+
+    .step-title {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .step-subtitle {
+      display: block;
+      color: #b9c3d4;
+      font-size: 12px;
+      margin-top: 3px;
+      line-height: 1.35;
+    }
+
+    .step-btn.active .step-subtitle {
+      color: var(--muted);
+    }
+
+    .main {
+      min-width: 0;
+      padding: 24px;
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .intro h2 {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 40px);
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+
+    .intro p {
+      margin: 9px 0 0;
+      color: var(--muted);
+      line-height: 1.65;
+      max-width: 960px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: var(--radius);
+      display: inline-grid;
+      place-items: center;
+      cursor: pointer;
+      color: var(--ink);
+      box-shadow: 0 4px 14px rgba(29, 36, 48, 0.06);
+    }
+
+    .icon-btn:hover,
+    .icon-btn:focus-visible {
+      border-color: var(--green);
+      outline: none;
+    }
+
+    .icon-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .icon-btn svg {
+      width: 18px;
+      height: 18px;
+      min-width: 0;
+    }
+
+    .summary-grid,
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .info-card,
+    .result-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 15px;
+      min-width: 0;
+    }
+
+    .info-card h3,
+    .result-card strong {
+      display: block;
+      margin: 0 0 8px;
+      font-size: 14px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    .info-card p,
+    .result-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 13px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.34fr) minmax(350px, 0.66fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }
+
+    .panel-head {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .panel-head h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      background: #ffffff;
+      line-height: 1.2;
+    }
+
+    .status-badge {
+      color: #164d39;
+      background: #eefaf4;
+      border-color: #bfe9d2;
+    }
+
+    .diagram-wrap {
+      padding: 14px;
+      overflow: auto;
+      background:
+        linear-gradient(#eef2f7 1px, transparent 1px),
+        linear-gradient(90deg, #eef2f7 1px, transparent 1px);
+      background-size: 28px 28px;
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+
+    .diagram-wrap > svg {
+      display: block;
+      width: 100%;
+      min-width: 1040px;
+      height: auto;
+    }
+
+    .node rect {
+      fill: #ffffff;
+      stroke: #c7d0dd;
+      stroke-width: 1.3;
+      transition: fill 180ms ease, stroke 180ms ease, filter 180ms ease, opacity 180ms ease;
+    }
+
+    .node text {
+      fill: #1d2430;
+      font-size: 13px;
+      font-weight: 700;
+      pointer-events: none;
+    }
+
+    .node .small {
+      fill: #667085;
+      font-size: 10.4px;
+      font-weight: 600;
+    }
+
+    .node .tiny {
+      fill: #667085;
+      font-size: 9.5px;
+      font-weight: 600;
+    }
+
+    .node.inactive,
+    .flow.inactive {
+      opacity: 0.18;
+    }
+
+    .node.active rect {
+      stroke-width: 2.4;
+      filter: drop-shadow(0 8px 10px rgba(33, 130, 92, 0.18));
+    }
+
+    .legacy.active rect { fill: #f1f3f6; stroke: #6b7280; }
+    .storage.active rect { fill: #e8f2ff; stroke: var(--blue); }
+    .processing.active rect { fill: #ecfbfd; stroke: var(--cyan); }
+    .orchestration.active rect { fill: #f4edff; stroke: var(--violet); }
+    .warehouse.active rect { fill: #eaf8f1; stroke: var(--green); }
+    .quality.active rect { fill: #fff0f0; stroke: var(--red); }
+    .security.active rect { fill: #fff3df; stroke: var(--amber); }
+    .activation.active rect { fill: #edf7ff; stroke: var(--slate); }
+
+    .flow {
+      fill: none;
+      stroke: #b6c0ce;
+      stroke-width: 2.2;
+      marker-end: url(#arrow);
+      transition: stroke 180ms ease, stroke-width 180ms ease, opacity 180ms ease;
+    }
+
+    .flow.active {
+      stroke: var(--green);
+      stroke-width: 3.4;
+      opacity: 1;
+    }
+
+    .flow.blue.active { stroke: var(--blue); }
+    .flow.violet.active { stroke: var(--violet); }
+    .flow.warn.active { stroke: var(--red); }
+    .flow.amber.active { stroke: var(--amber); }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 14px 0;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .detail {
+      display: grid;
+      gap: 14px;
+    }
+
+    .content {
+      padding: 18px;
+    }
+
+    .content h4 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    .content p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .content ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .quote {
+      border-left: 4px solid var(--green);
+      background: #f1fbf6;
+      padding: 13px 14px;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      color: #164d39;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .mapping,
+    .repo-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .map-row {
+      display: grid;
+      grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr);
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: #ffffff;
+    }
+
+    .map-row strong,
+    .repo-item strong {
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .map-row span,
+    .repo-item span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .repo-item {
+      display: grid;
+      gap: 4px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: #ffffff;
+    }
+
+    .callout {
+      margin-top: 14px;
+      border: 1px solid #f0d5a7;
+      background: #fff8ed;
+      color: #6f4600;
+      border-radius: var(--radius);
+      padding: 13px 14px;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    @media (max-width: 1240px) {
+      .summary-grid,
+      .results-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .detail {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 820px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        height: auto;
+      }
+
+      .main {
+        padding: 16px;
+      }
+
+      .topbar,
+      .summary-grid,
+      .detail,
+      .results-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        justify-content: flex-start;
+      }
+
+      .map-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <small>CRM Migration Visual Guide</small>
+        <h1>Cheapest GCP Architecture</h1>
+      </div>
+      <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+      <nav class="steps" id="steps" aria-label="cheapest 架構步驟"></nav>
+    </aside>
+
+    <main class="main">
+      <section class="topbar">
+        <div class="intro">
+          <h2>用 serverless 與 batch primitives 做最低固定成本 CRM migration</h2>
+          <p>Cheapest 方案刻意避開 Composer、Data Fusion、Dataflow、Dataplex 等較高固定成本服務；CRM CSV 交給 GCS + BigQuery load jobs，排程和重跑交給 Scheduler + Workflows，長任務和 Salesforce smoke test 放到 Cloud Run Jobs。</p>
+        </div>
+        <div class="controls">
+          <button class="icon-btn" id="prevBtn" aria-label="上一個步驟" title="上一個步驟">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="icon-btn" id="nextBtn" aria-label="下一個步驟" title="下一個步驟">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <section class="summary-grid" aria-label="方案摘要">
+        <article class="info-card">
+          <h3>Cost Positioning</h3>
+          <p>不用常駐 Airflow 或 low-code ETL runtime，靠 pay-per-use 的 Workflows、BigQuery jobs、Cloud Run Jobs 控制固定成本。</p>
+        </article>
+        <article class="info-card">
+          <h3>Core Stack</h3>
+          <p>Cloud Storage、Datastream、Cloud Scheduler、Workflows、BigQuery、Cloud Run Jobs、Secret Manager、Cloud Build。</p>
+        </article>
+        <article class="info-card">
+          <h3>Operational Surface</h3>
+          <p>Workflows execution history 加上 `audit.pipeline_step_status` 與 `audit.quality_check_results`，取代 Composer dashboard。</p>
+        </article>
+        <article class="info-card">
+          <h3>Honest Status</h3>
+          <p>Salesforce Cloud Run Job 已能 dry-run 和寫 audit；真正 Campaign Member write 尚未啟用。</p>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <div class="panel-head">
+            <h3 id="diagramTitle">Step 1: Single CRM lake bucket</h3>
+            <span class="badge" id="stepBadge">Step 1 / 9</span>
+          </div>
+          <div class="legend" aria-label="元件分類">
+            <span><i class="dot" style="background: var(--slate)"></i>Legacy / External</span>
+            <span><i class="dot" style="background: var(--blue)"></i>Storage</span>
+            <span><i class="dot" style="background: var(--cyan)"></i>Processing</span>
+            <span><i class="dot" style="background: var(--violet)"></i>Orchestration</span>
+            <span><i class="dot" style="background: var(--green)"></i>Warehouse</span>
+            <span><i class="dot" style="background: var(--red)"></i>Quality / Audit</span>
+            <span><i class="dot" style="background: var(--amber)"></i>Security / CI/CD</span>
+          </div>
+          <div class="diagram-wrap">
+            <svg viewBox="0 0 1220 760" role="img" aria-labelledby="svgTitle svgDesc">
+              <title id="svgTitle">Cheapest CRM migration architecture</title>
+              <desc id="svgDesc">Interactive SVG showing the cheapest CRM migration architecture using GCS, BigQuery load jobs, Workflows, Cloud Run Jobs, Datastream, and Cloud Build.</desc>
+              <defs>
+                <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L0,6 L9,3 z" fill="currentColor"></path>
+                </marker>
+              </defs>
+
+              <g class="node legacy" data-node="crmCsv" transform="translate(34 70)">
+                <rect width="164" height="78" rx="8"></rect>
+                <text x="16" y="30">CRM CSV</text>
+                <text class="small" x="16" y="52">nightly files</text>
+              </g>
+              <g class="node legacy" data-node="oracle" transform="translate(34 202)">
+                <rect width="164" height="78" rx="8"></rect>
+                <text x="16" y="30">Oracle DB</text>
+                <text class="small" x="16" y="52">APP.USER_RAW</text>
+              </g>
+              <g class="node legacy" data-node="github" transform="translate(34 430)">
+                <rect width="164" height="78" rx="8"></rect>
+                <text x="16" y="30">GitHub PR</text>
+                <text class="small" x="16" y="52">review changes</text>
+              </g>
+
+              <g class="node storage" data-node="gcsLake" transform="translate(250 52)">
+                <rect width="190" height="100" rx="8"></rect>
+                <text x="16" y="30">GCS CRM Lake</text>
+                <text class="small" x="16" y="52">raw / archive / rejected</text>
+                <text class="tiny" x="16" y="70">single bucket + prefixes</text>
+              </g>
+              <g class="node security" data-node="secret" transform="translate(250 196)">
+                <rect width="190" height="78" rx="8"></rect>
+                <text x="16" y="30">Secret Manager</text>
+                <text class="small" x="16" y="52">Oracle + Salesforce</text>
+              </g>
+              <g class="node processing" data-node="datastream" transform="translate(250 314)">
+                <rect width="190" height="90" rx="8"></rect>
+                <text x="16" y="31">Datastream</text>
+                <text class="small" x="16" y="53">Oracle CDC</text>
+                <text class="tiny" x="16" y="70">kept for core requirement</text>
+              </g>
+              <g class="node security" data-node="cloudBuild" transform="translate(250 474)">
+                <rect width="190" height="88" rx="8"></rect>
+                <text x="16" y="31">Cloud Build</text>
+                <text class="small" x="16" y="53">CI / CD configs</text>
+                <text class="tiny" x="16" y="70">fmt validate build apply</text>
+              </g>
+              <g class="node security" data-node="artifact" transform="translate(250 610)">
+                <rect width="190" height="78" rx="8"></rect>
+                <text x="16" y="30">Artifact Registry</text>
+                <text class="small" x="16" y="52">cheapest-jobs images</text>
+              </g>
+
+              <g class="node orchestration" data-node="scheduler" transform="translate(512 70)">
+                <rect width="190" height="78" rx="8"></rect>
+                <text x="16" y="30">Cloud Scheduler</text>
+                <text class="small" x="16" y="52">nightly trigger</text>
+              </g>
+              <g class="node orchestration" data-node="workflows" transform="translate(512 198)">
+                <rect width="190" height="104" rx="8"></rect>
+                <text x="16" y="32">Workflows</text>
+                <text class="small" x="16" y="54">nightly-crm-pipeline</text>
+                <text class="tiny" x="16" y="72">step_name rerun input</text>
+              </g>
+              <g class="node processing" data-node="bqLoad" transform="translate(512 348)">
+                <rect width="190" height="82" rx="8"></rect>
+                <text x="16" y="31">BigQuery Load Jobs</text>
+                <text class="small" x="16" y="53">CSV to raw tables</text>
+              </g>
+              <g class="node activation" data-node="cloudRun" transform="translate(512 570)">
+                <rect width="190" height="90" rx="8"></rect>
+                <text x="16" y="31">Cloud Run Job</text>
+                <text class="small" x="16" y="53">Salesforce dry run</text>
+                <text class="tiny" x="16" y="70">writes not enabled</text>
+              </g>
+
+              <g class="node warehouse" data-node="bqRaw" transform="translate(770 44)">
+                <rect width="184" height="78" rx="8"></rect>
+                <text x="16" y="30">BigQuery Raw</text>
+                <text class="small" x="16" y="52">CRM + APP_USER_RAW</text>
+              </g>
+              <g class="node warehouse" data-node="bqStaging" transform="translate(770 160)">
+                <rect width="184" height="78" rx="8"></rect>
+                <text x="16" y="30">BigQuery Staging</text>
+                <text class="small" x="16" y="52">clean CRM tables</text>
+              </g>
+              <g class="node warehouse" data-node="bqCurated" transform="translate(770 276)">
+                <rect width="184" height="78" rx="8"></rect>
+                <text x="16" y="30">BigQuery Curated</text>
+                <text class="small" x="16" y="52">user_360</text>
+              </g>
+              <g class="node warehouse" data-node="bqMart" transform="translate(770 392)">
+                <rect width="184" height="78" rx="8"></rect>
+                <text x="16" y="30">BigQuery Mart</text>
+                <text class="small" x="16" y="52">campaign audience</text>
+              </g>
+              <g class="node quality" data-node="bqAudit" transform="translate(770 538)">
+                <rect width="184" height="88" rx="8"></rect>
+                <text x="16" y="31">BigQuery Audit</text>
+                <text class="small" x="16" y="53">step status + quality</text>
+                <text class="tiny" x="16" y="70">dashboard data</text>
+              </g>
+
+              <g class="node quality" data-node="quality" transform="translate(1010 298)">
+                <rect width="170" height="82" rx="8"></rect>
+                <text x="16" y="31">SQL Quality Gate</text>
+                <text class="small" x="16" y="53">ASSERT no FAIL</text>
+              </g>
+              <g class="node activation" data-node="salesforce" transform="translate(1010 520)">
+                <rect width="170" height="82" rx="8"></rect>
+                <text x="16" y="31">Salesforce</text>
+                <text class="small" x="16" y="53">future writes</text>
+              </g>
+
+              <path class="flow blue" data-flow="csvToLake" d="M198 109 C224 109 224 102 250 102"></path>
+              <path class="flow amber" data-flow="secretToDatastream" d="M440 235 C470 252 470 352 512 390"></path>
+              <path class="flow amber" data-flow="secretToRun" d="M440 235 C485 308 475 595 512 614"></path>
+              <path class="flow" data-flow="oracleToDatastream" d="M198 241 C224 258 224 354 250 359"></path>
+              <path class="flow" data-flow="datastreamToRaw" d="M440 359 C590 360 620 82 770 83"></path>
+              <path class="flow violet" data-flow="schedulerToWorkflows" d="M607 148 L607 198"></path>
+              <path class="flow violet" data-flow="workflowsToLoad" d="M607 302 L607 348"></path>
+              <path class="flow blue" data-flow="lakeToLoad" d="M440 102 C494 132 474 372 512 389"></path>
+              <path class="flow" data-flow="loadToRaw" d="M702 389 C742 372 725 83 770 83"></path>
+              <path class="flow" data-flow="rawToStaging" d="M862 122 L862 160"></path>
+              <path class="flow" data-flow="stagingToCurated" d="M862 238 L862 276"></path>
+              <path class="flow" data-flow="curatedToMart" d="M862 354 L862 392"></path>
+              <path class="flow warn" data-flow="martToQuality" d="M954 431 C988 431 978 340 1010 340"></path>
+              <path class="flow warn" data-flow="qualityToAudit" d="M1010 352 C945 432 1018 578 954 582"></path>
+              <path class="flow warn" data-flow="workflowToAudit" d="M702 250 C750 320 720 580 770 582"></path>
+              <path class="flow violet" data-flow="workflowToRun" d="M607 302 L607 570"></path>
+              <path class="flow" data-flow="martToRun" d="M954 431 C992 470 470 575 512 612"></path>
+              <path class="flow amber" data-flow="githubToBuild" d="M198 469 C224 486 224 519 250 519"></path>
+              <path class="flow amber" data-flow="buildToArtifact" d="M345 562 L345 610"></path>
+              <path class="flow amber" data-flow="artifactToRun" d="M440 649 C470 656 475 615 512 615"></path>
+              <path class="flow amber" data-flow="buildToInfra" d="M440 519 C482 494 470 250 512 250"></path>
+              <path class="flow" data-flow="runToSalesforce" d="M702 615 C834 628 884 562 1010 562"></path>
+            </svg>
+          </div>
+        </article>
+
+        <aside class="detail">
+          <article class="panel">
+            <div class="panel-head">
+              <h3>本步驟目的</h3>
+              <span class="badge status-badge" id="statusBadge">已實作</span>
+            </div>
+            <div class="content">
+              <h4 id="stepTitle">Single GCS CRM lake</h4>
+              <p id="stepDescription"></p>
+              <ul id="stepBullets"></ul>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h3>處理的需求</h3>
+              <span class="badge" id="mappingBadge">3 items</span>
+            </div>
+            <div class="content mapping" id="mapping"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h3>Repo 對應</h3>
+              <span class="badge" id="repoBadge">2 files</span>
+            </div>
+            <div class="content repo-list" id="repoList"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h3>完成結果</h3>
+              <span class="badge" id="phaseBadge">Foundation</span>
+            </div>
+            <div class="content">
+              <div class="quote" id="outcome"></div>
+            </div>
+          </article>
+        </aside>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h3>整體優化後的結果</h3>
+          <span class="badge">Cheapest Tradeoff</span>
+        </div>
+        <div class="content">
+          <div class="results-grid">
+            <article class="result-card">
+              <strong>低固定成本</strong>
+              <p>不用 Composer 或 Data Fusion 常駐環境，夜間批次靠 Workflows、BigQuery jobs 和 Cloud Run Jobs 在需要時才產生成本。</p>
+            </article>
+            <article class="result-card">
+              <strong>批次處理夠直接</strong>
+              <p>CRM CSV 用 BigQuery load jobs 載入 raw tables，SQL 在 BigQuery 內完成 staging、curated、mart 和 quality checks。</p>
+            </article>
+            <article class="result-card">
+              <strong>最低可接受營運性</strong>
+              <p>Workflows execution history 搭配 audit tables 提供 dashboard 資料和 rerun contract，雖然不像 Airflow 細緻，但成本更低。</p>
+            </article>
+            <article class="result-card">
+              <strong>Activation 謹慎落地</strong>
+              <p>Salesforce job 目前做 OAuth、audience count 和 audit dry run；真正寫 Campaign Member 前仍需補 mapping 與 idempotent upsert。</p>
+            </article>
+          </div>
+          <div class="callout">完成度提醒：cheapest 是「低成本但不砍 Oracle CDC」。Datastream 保留；省成本的是不用 Data Fusion、Composer、Dataflow、Dataplex。Cloud Run Salesforce job 目前 `SALESFORCE_DRY_RUN=true`，不要把 dry run 說成 production write 已完成。</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const steps = [
+      {
+        title: "Single GCS CRM Lake",
+        short: "one bucket + prefixes",
+        phase: "Foundation",
+        status: "已實作",
+        diagram: "Step 1: Single CRM lake bucket",
+        nodes: ["crmCsv", "gcsLake"],
+        flows: ["csvToLake"],
+        desc: "用一個 Cloud Storage bucket 承接 CRM CSV，再用 `raw/crm/`、`archive/crm/`、`rejected/crm/` prefix 表示狀態，減少 bucket 數量和管理成本。",
+        bullets: [
+          "bucket name 依 project 組成，例如 `cheapest-497709-crm-lake`。",
+          "raw prefix 放待處理 CSV，archive prefix 放成功處理後來源檔，rejected prefix 放失敗 evidence。",
+          "Terraform lifecycle rule 依 prefix 控制 raw、archive、rejected retention。",
+          "上傳可以先用 `scripts/upload_crm_csv.sh` 或 production cron/upload job。"
+        ],
+        mapping: [
+          ["Low-cost storage", "單 bucket + prefix 足以表示狀態，降低管理面複雜度。"],
+          ["Nightly CRM input", "Workflows 可以用 run_date 組出固定 GCS prefix。"],
+          ["Retention control", "同一 bucket 內對不同 prefix 套不同 lifecycle rule。"]
+        ],
+        repo: [
+          ["Bucket Terraform", "cheapest/terraform/storage.tf"],
+          ["Upload script", "cheapest/scripts/upload_crm_csv.sh"],
+          ["Runbook", "cheapest/docs/step1-crm-upload.md"]
+        ],
+        outcome: "CRM CSV 有低成本 landing zone，而且不需要為 raw、archive、rejected 各開一個 bucket。"
+      },
+      {
+        title: "Oracle CDC With Datastream",
+        short: "keep core CDC",
+        phase: "Migration",
+        status: "已實作 scaffold",
+        diagram: "Step 2: Oracle CDC with Datastream",
+        nodes: ["oracle", "datastream", "secret", "bqRaw"],
+        flows: ["oracleToDatastream", "secretToDatastream", "datastreamToRaw"],
+        desc: "Cheapest 方案仍保留 Datastream，因為 Oracle migration/CDC 是正式需求；省成本的是不用 Data Fusion 或 Dataflow 來處理 CRM CSV。",
+        bullets: [
+          "Secret Manager 保存 Oracle host、service name、username、password 等 connection values。",
+          "Datastream 建 Oracle source profile、BigQuery destination profile 和 stream。",
+          "Stream 目標是 BigQuery raw dataset，例如 `raw.APP_USER_RAW`。",
+          "Terraform 包含 private connection、firewall、connection profile 和 stream 設定。"
+        ],
+        mapping: [
+          ["Oracle migration", "使用 Datastream backfill + CDC，避免把正式 CDC 降級成手動 CSV export。"],
+          ["Secure credentials", "Oracle password 由 Secret Manager 管理，Datastream service agent 只讀必要 secret。"],
+          ["Low-cost boundary", "只對核心 Oracle CDC 使用 Datastream；CRM batch 則走便宜的 load jobs。"]
+        ],
+        repo: [
+          ["Datastream Terraform", "cheapest/terraform/datastream.tf"],
+          ["Oracle secrets", "cheapest/terraform/credential_store.tf"],
+          ["Runbook", "cheapest/docs/step2-oracle-datastream.md"]
+        ],
+        outcome: "Oracle user master 以 CDC 方式進 BigQuery raw layer，CRM CSV 則保留低成本 batch path。"
+      },
+      {
+        title: "Scheduler + Workflows",
+        short: "serverless orchestration",
+        phase: "Orchestration",
+        status: "已實作",
+        diagram: "Step 3: Scheduler and Workflows orchestration",
+        nodes: ["scheduler", "workflows", "bqAudit"],
+        flows: ["schedulerToWorkflows", "workflowToAudit"],
+        desc: "用 Cloud Scheduler 定時觸發 Workflows，取代 Cloud Composer。Workflow 接受 `run_date` 和 `step_name`，支援全流程或單步 rerun。",
+        bullets: [
+          "Scheduler job 預設可 paused，避免 lab apply 後自動跑未完成 pipeline。",
+          "Workflow service account 有 logging、BigQuery job、GCS read、Cloud Run invoke 所需權限。",
+          "Workflow 支援 `all`、`load_crm_csv`、`run_transform_sql`、`run_quality_checks`、`push_salesforce`。",
+          "Execution history 加上 audit tables 形成低成本 dashboard 基礎。"
+        ],
+        mapping: [
+          ["Avoid Composer fixed cost", "Workflows 沒有 Airflow 常駐環境，適合 nightly batch controller。"],
+          ["Rerun failed sections", "`step_name` input 可只跑 load、transform、quality 或 Salesforce step。"],
+          ["Dashboard enough for cheapest", "Workflows executions 和 BigQuery audit tables 提供最小可用營運視角。"]
+        ],
+        repo: [
+          ["Workflow YAML", "cheapest/workflows/nightly-crm-pipeline.yaml"],
+          ["Workflow Terraform", "cheapest/terraform/workflow.tf"],
+          ["Runbook", "cheapest/docs/step3-scheduler-workflows.md"]
+        ],
+        outcome: "用 serverless orchestration 接住 nightly pipeline，不為 Airflow dashboard 支付常駐成本。"
+      },
+      {
+        title: "BigQuery Load Jobs",
+        short: "CSV to raw",
+        phase: "Ingestion",
+        status: "已實作",
+        diagram: "Step 4: BigQuery load jobs for CRM CSV",
+        nodes: ["gcsLake", "workflows", "bqLoad", "bqRaw"],
+        flows: ["lakeToLoad", "workflowsToLoad", "loadToRaw"],
+        desc: "Workflow 直接呼叫 BigQuery load jobs，把四種 CRM CSV 從 GCS raw prefix 載入 BigQuery raw tables。",
+        bullets: [
+          "四張 raw tables：`crm_sales`、`crm_support`、`crm_campaign_events`、`crm_new_partner_leads`。",
+          "Load config 使用 CSV、skip header、schema fields、`WRITE_TRUNCATE`。",
+          "BigQuery datasets 包含 raw、staging、curated、mart、audit。",
+          "Workflow service account 需要 GCS objectViewer、BigQuery jobUser、raw dataEditor。"
+        ],
+        mapping: [
+          ["Batch CRM files", "CSV nightly batch 不需要 Dataflow 或 Data Fusion，BigQuery load job 就夠。"],
+          ["Idempotent rerun", "`WRITE_TRUNCATE` 讓同一天重載 raw table 不會 append 重複資料。"],
+          ["Cost control", "Load job 對這類批次 CSV 是最直接、最低營運負擔的路徑。"]
+        ],
+        repo: [
+          ["Load workflow", "cheapest/workflows/nightly-crm-pipeline.yaml"],
+          ["BigQuery Terraform", "cheapest/terraform/bigquery.tf"],
+          ["Schemas", "cheapest/schemas/*.json"],
+          ["Runbook", "cheapest/docs/step4-bigquery-load.md"]
+        ],
+        outcome: "CRM CSV 進 raw layer，不需要啟動長時間運行的 ETL 平台。"
+      },
+      {
+        title: "SQL Transform + Quality",
+        short: "BigQuery SQL gate",
+        phase: "Warehouse",
+        status: "已實作於 Workflow",
+        diagram: "Step 5: SQL transformation and quality checks",
+        nodes: ["bqRaw", "bqStaging", "bqCurated", "bqMart", "quality", "bqAudit", "workflows"],
+        flows: ["rawToStaging", "stagingToCurated", "curatedToMart", "martToQuality", "qualityToAudit", "workflowToAudit"],
+        desc: "用 BigQuery SQL 完成 raw 到 staging、curated、mart 的 transformation，並用 quality SQL 寫 audit results，再用 ASSERT 擋住 fail 狀態。",
+        bullets: [
+          "`staging.crm_sales_clean`、`staging.crm_support_clean`、`staging.crm_campaign_events_clean` 做基本清理。",
+          "`curated.user_360` join Oracle user 和 CRM activity。",
+          "`mart.salesforce_campaign_audience` 產生 Salesforce audience。",
+          "`audit.quality_check_results` 記錄 row count 和 duplicate key checks。",
+          "BigQuery `ASSERT` 讓 quality failure 直接中斷 Workflow。"
+        ],
+        mapping: [
+          ["No Dataform/Dataplex cost", "Cheapest 方案把 transform 和 quality 留在 BigQuery SQL + audit tables。"],
+          ["Quality before activation", "Audience row count 和 duplicate keys 必須通過，才會跑 Salesforce job。"],
+          ["Auditability", "每個 transform/quality step 都寫入 audit tables，支援查詢和 dashboard。"]
+        ],
+        repo: [
+          ["Workflow SQL", "cheapest/workflows/nightly-crm-pipeline.yaml"],
+          ["Raw count SQL", "cheapest/sql/validate_raw_counts.sql"],
+          ["Quality docs", "cheapest/docs/step5-sql-quality.md"]
+        ],
+        outcome: "資料處理和品質 gate 都在 BigQuery 裡完成，少開服務但仍保留可查的 quality/audit 結果。"
+      },
+      {
+        title: "Workflow Rerun Design",
+        short: "step_name rerun",
+        phase: "Operations",
+        status: "已實作核心 input",
+        diagram: "Step 6: Workflow dashboard and rerun design",
+        nodes: ["workflows", "bqAudit", "bqLoad", "quality", "cloudRun"],
+        flows: ["workflowsToLoad", "workflowToAudit", "workflowToRun", "martToQuality"],
+        desc: "不用 Airflow task UI，而是用 Workflows execution history、`step_name` input 和 BigQuery audit tables 提供最低可接受 rerun 方法。",
+        bullets: [
+          "Workflow input 包含 `run_date` 和 `step_name`。",
+          "可跑 `all` 或單步 `load_crm_csv`、`run_transform_sql`、`run_quality_checks`、`push_salesforce`。",
+          "Audit tables 記錄 step status、quality results、error message。",
+          "這比 Composer UI 簡化，但符合 cheapest 的成本目標。"
+        ],
+        mapping: [
+          ["Rerun failed step", "用 Workflow argument 選擇要重跑哪一段。"],
+          ["Dashboard visibility", "Workflows executions + audit tables 可被 Console、BigQuery 或 Looker Studio 查詢。"],
+          ["Idempotency expectation", "load 使用 truncate、transform 使用 create or replace，降低重跑重複資料風險。"]
+        ],
+        repo: [
+          ["Workflow contract", "cheapest/workflows/nightly-crm-pipeline.yaml"],
+          ["Rerun docs", "cheapest/docs/step6-rerun-design.md"]
+        ],
+        outcome: "Cheapest 方案用較少 UI 換取低成本，但仍保留可重跑、可查 execution 和 audit 的操作路徑。"
+      },
+      {
+        title: "Cloud Run Jobs + Salesforce",
+        short: "dry run smoke test",
+        phase: "Activation",
+        status: "部分已實作",
+        diagram: "Step 7: Cloud Run Jobs for Salesforce",
+        nodes: ["cloudRun", "secret", "bqMart", "bqAudit", "salesforce", "artifact", "workflows"],
+        flows: ["workflowToRun", "secretToRun", "martToRun", "runToSalesforce", "artifactToRun", "workflowToAudit"],
+        desc: "Cloud Run Job 負責需要 Python logic 和 Salesforce API 的長任務。現在 job 已有 Python code、Dockerfile 和 Terraform，但預設只做 dry-run smoke test。",
+        bullets: [
+          "Job 讀 `mart.salesforce_campaign_audience`，計算 audience count。",
+          "Job 使用 Salesforce client credentials secret 做 OAuth。",
+          "`SALESFORCE_DRY_RUN=true` 是 Terraform 預設。",
+          "若改成 `SALESFORCE_DRY_RUN=false`，程式會 raise not implemented，提醒先補 CampaignMember upsert mapping。",
+          "成功或失敗都會寫 `audit.pipeline_step_status`。"
+        ],
+        mapping: [
+          ["Long-running/API task", "Cloud Run Jobs 比 request/response service 更適合 batch push。"],
+          ["Secure Salesforce credentials", "Client id、secret、instance URL 由 Secret Manager 注入。"],
+          ["Avoid overclaiming", "目前是 dry-run smoke test，不是真正 production Salesforce write。"]
+        ],
+        repo: [
+          ["Job code", "cheapest/cloud-run/salesforce-job/main.py"],
+          ["Dockerfile", "cheapest/cloud-run/salesforce-job/Dockerfile"],
+          ["Terraform", "cheapest/terraform/salesforce_job.tf"],
+          ["Runbook", "cheapest/docs/step7-cloud-run-salesforce.md"]
+        ],
+        outcome: "Activation step 已有可部署 job scaffold 和 dry-run audit，但真正 Campaign Member 寫入仍需後續實作 upsert mapping。"
+      },
+      {
+        title: "Terraform + Review Deployment",
+        short: "IaC and smoke test",
+        phase: "Governance",
+        status: "已實作 scaffold",
+        diagram: "Step 8: Terraform and review deployment",
+        nodes: ["github", "cloudBuild", "gcsLake", "datastream", "workflows", "cloudRun", "secret", "bqRaw", "bqAudit"],
+        flows: ["githubToBuild", "buildToInfra", "secretToDatastream", "secretToRun", "datastreamToRaw", "workflowToAudit"],
+        desc: "即使為了省成本不用 Composer/Data Fusion，production 變更仍要保留 Terraform、Workflow YAML、SQL、Cloud Run code、schema files 的 review 和 deployment discipline。",
+        bullets: [
+          "Terraform 管理 GCS、BigQuery、Secret Manager、Datastream、Workflows、Scheduler、Artifact Registry、Cloud Run Jobs。",
+          "Cloud Console 手動操作只適合 lab troubleshooting，不應成為 production source of truth。",
+          "Step 8 明確列出目前不自動做的項目：on-prem export、真正 Salesforce write、archive_files。",
+          "PR review 是整體方案治理能力，不代表每一步都各自推 PR。"
+        ],
+        mapping: [
+          ["Template deployment", "Terraform 和 Cloud Build configs 讓 infra 可重建、可 review。"],
+          ["Avoid console drift", "資源定義留在 repo，而不是散在 Console 手動設定。"],
+          ["Honest limitations", "文件列出 dry run 和尚未自動 archive 的範圍。"]
+        ],
+        repo: [
+          ["Deployment docs", "cheapest/docs/step8-template-deployment.md"],
+          ["Terraform guide", "cheapest/docs/terraform-resource-guide.md"],
+          ["Terraform root", "cheapest/terraform/"]
+        ],
+        outcome: "Cheapest 方案仍有 production governance，不因為省成本就退回手動 Console deployment。"
+      },
+      {
+        title: "Cloud Build CI/CD",
+        short: "CI validate, CD apply",
+        phase: "CI/CD",
+        status: "已實作 config",
+        diagram: "Step 9: Cloud Build CI/CD and remote state",
+        nodes: ["github", "cloudBuild", "artifact", "cloudRun", "workflows", "bqAudit"],
+        flows: ["githubToBuild", "buildToArtifact", "artifactToRun", "buildToInfra", "workflowToAudit"],
+        desc: "Step 9 把本機 Terraform apply 推進到 GitHub + Cloud Build：CI 做檢查和 image build，CD 對 main/manual trigger 做 plan/apply。",
+        bullets: [
+          "`cloudbuild.yaml` 做 Terraform fmt/validate、Python compile、Docker build/push。",
+          "`cloudbuild-deploy.yaml` 做 Terraform init/validate、Docker build、plan、apply。",
+          "CD 會真的改 GCP resources，應只接 main branch 或 manual approval。",
+          "Terraform backend scaffold 支援 remote state，避免只靠本機 tfstate。"
+        ],
+        mapping: [
+          ["Technical review", "PR 先跑 CI，避免格式、Terraform validate、Python syntax、Docker build 問題進 main。"],
+          ["Controlled deployment", "CD 才做 Terraform apply，且應限制在 main 或人工觸發。"],
+          ["Repeatable release", "同一份 config 更新 Workflows、Cloud Run image、IAM、Scheduler 和 datasets。"]
+        ],
+        repo: [
+          ["CI config", "cheapest/cloudbuild.yaml"],
+          ["CD config", "cheapest/cloudbuild-deploy.yaml"],
+          ["Remote state", "cheapest/terraform/backend.tf"],
+          ["Runbook", "cheapest/docs/step9-cicd-cloud-build.md"]
+        ],
+        outcome: "Cheapest 不只是一組本機指令，而是可以逐步走向 CI/CD 的可交付方案。"
+      }
+    ];
+
+    let current = 0;
+
+    const els = {
+      steps: document.getElementById("steps"),
+      progressBar: document.getElementById("progressBar"),
+      diagramTitle: document.getElementById("diagramTitle"),
+      stepBadge: document.getElementById("stepBadge"),
+      statusBadge: document.getElementById("statusBadge"),
+      phaseBadge: document.getElementById("phaseBadge"),
+      stepTitle: document.getElementById("stepTitle"),
+      stepDescription: document.getElementById("stepDescription"),
+      stepBullets: document.getElementById("stepBullets"),
+      mapping: document.getElementById("mapping"),
+      mappingBadge: document.getElementById("mappingBadge"),
+      repoList: document.getElementById("repoList"),
+      repoBadge: document.getElementById("repoBadge"),
+      outcome: document.getElementById("outcome"),
+      prevBtn: document.getElementById("prevBtn"),
+      nextBtn: document.getElementById("nextBtn")
+    };
+
+    function createStepButtons() {
+      steps.forEach((step, index) => {
+        const btn = document.createElement("button");
+        btn.className = "step-btn";
+        btn.type = "button";
+        btn.innerHTML = `
+          <span class="step-num">${index + 1}</span>
+          <span>
+            <span class="step-title">${step.title}</span>
+            <span class="step-subtitle">${step.short}</span>
+          </span>
+        `;
+        btn.addEventListener("click", () => setStep(index));
+        els.steps.appendChild(btn);
+      });
+    }
+
+    function setActiveClass(selector, activeList, dataName) {
+      document.querySelectorAll(selector).forEach((el) => {
+        const name = el.dataset[dataName];
+        const active = activeList.includes(name);
+        el.classList.toggle("active", active);
+        el.classList.toggle("inactive", !active);
+      });
+    }
+
+    function appendTextList(parent, items) {
+      parent.innerHTML = "";
+      items.forEach((text) => {
+        const li = document.createElement("li");
+        li.textContent = text;
+        parent.appendChild(li);
+      });
+    }
+
+    function renderMapping(step) {
+      els.mapping.innerHTML = "";
+      step.mapping.forEach(([requirement, decision]) => {
+        const row = document.createElement("div");
+        row.className = "map-row";
+
+        const req = document.createElement("strong");
+        req.textContent = requirement;
+        const text = document.createElement("span");
+        text.textContent = decision;
+
+        row.append(req, text);
+        els.mapping.appendChild(row);
+      });
+      els.mappingBadge.textContent = `${step.mapping.length} items`;
+    }
+
+    function renderRepo(step) {
+      els.repoList.innerHTML = "";
+      step.repo.forEach(([label, path]) => {
+        const item = document.createElement("div");
+        item.className = "repo-item";
+
+        const title = document.createElement("strong");
+        title.textContent = label;
+        const file = document.createElement("span");
+        file.textContent = path;
+
+        item.append(title, file);
+        els.repoList.appendChild(item);
+      });
+      els.repoBadge.textContent = `${step.repo.length} files`;
+    }
+
+    function setStep(index) {
+      current = Math.max(0, Math.min(index, steps.length - 1));
+      const step = steps[current];
+
+      document.querySelectorAll(".step-btn").forEach((btn, i) => btn.classList.toggle("active", i === current));
+
+      els.progressBar.style.width = `${((current + 1) / steps.length) * 100}%`;
+      els.diagramTitle.textContent = step.diagram;
+      els.stepBadge.textContent = `Step ${current + 1} / ${steps.length}`;
+      els.statusBadge.textContent = step.status;
+      els.phaseBadge.textContent = step.phase;
+      els.stepTitle.textContent = step.title;
+      els.stepDescription.textContent = step.desc;
+      els.outcome.textContent = step.outcome;
+
+      appendTextList(els.stepBullets, step.bullets);
+      renderMapping(step);
+      renderRepo(step);
+
+      setActiveClass(".node", step.nodes, "node");
+      setActiveClass(".flow", step.flows, "flow");
+
+      els.prevBtn.disabled = current === 0;
+      els.nextBtn.disabled = current === steps.length - 1;
+    }
+
+    els.prevBtn.addEventListener("click", () => setStep(current - 1));
+    els.nextBtn.addEventListener("click", () => setStep(current + 1));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowLeft") setStep(current - 1);
+      if (event.key === "ArrowRight") setStep(current + 1);
+    });
+
+    createStepButtons();
+    setStep(0);
+  </script>
+</body>
+</html>
