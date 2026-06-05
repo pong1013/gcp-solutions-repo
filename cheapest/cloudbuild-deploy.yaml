@@ -1,0 +1,76 @@
+substitutions:
+  _REGION: us-central1
+  _BUCKET_LOCATION: US
+  _ORACLE_HOST: 10.128.0.2
+  _ORACLE_SERVICE_NAME: XEPDB1
+  _DATASTREAM_DESIRED_STATE: RUNNING
+  _SCHEDULER_PAUSED: "true"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - id: terraform-fmt
+    name: hashicorp/terraform:1.10.5
+    dir: cheapest/terraform
+    entrypoint: sh
+    args:
+      - -c
+      - terraform fmt -check
+
+  - id: terraform-init
+    name: hashicorp/terraform:1.10.5
+    dir: cheapest/terraform
+    args:
+      - init
+
+  - id: terraform-validate
+    name: hashicorp/terraform:1.10.5
+    dir: cheapest/terraform
+    args:
+      - validate
+
+  - id: salesforce-job-python-compile
+    name: python:3.12-slim
+    dir: cheapest/cloud-run/salesforce-job
+    entrypoint: python
+    args:
+      - -m
+      - py_compile
+      - main.py
+
+  - id: salesforce-job-docker-build
+    name: gcr.io/cloud-builders/docker
+    dir: cheapest/cloud-run/salesforce-job
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/cheapest-jobs/salesforce-job:latest
+      - .
+
+  - id: terraform-plan
+    name: hashicorp/terraform:1.10.5
+    dir: cheapest/terraform
+    args:
+      - plan
+      - -out=tfplan
+      - -var=project_id=$PROJECT_ID
+      - -var=region=$_REGION
+      - -var=bucket_location=$_BUCKET_LOCATION
+      - -var=oracle_host=$_ORACLE_HOST
+      - -var=oracle_service_name=$_ORACLE_SERVICE_NAME
+      - -var=datastream_desired_state=$_DATASTREAM_DESIRED_STATE
+      - -var=scheduler_paused=$_SCHEDULER_PAUSED
+      - -var=enable_salesforce_cloud_run_job=true
+      - -var=salesforce_job_image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/cheapest-jobs/salesforce-job:latest
+
+  - id: terraform-apply
+    name: hashicorp/terraform:1.10.5
+    dir: cheapest/terraform
+    args:
+      - apply
+      - -auto-approve
+      - tfplan
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/cheapest-jobs/salesforce-job:latest
