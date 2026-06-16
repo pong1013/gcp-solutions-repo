@@ -15,7 +15,7 @@ substitutions:
   _SALESFORCE_IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/complete-jobs/salesforce-job:latest
 
 options:
-  logging: LEGACY
+  logging: CLOUD_LOGGING_ONLY
   dynamic_substitutions: true
 
 steps:

@@ -306,7 +306,7 @@ CI trigger 只做檢查，不會 apply：
 11. Configuration 選：Cloud Build configuration file。
 12. Location 選：Repository。
 13. Cloud Build configuration file location 填：complete/cloudbuild.yaml。
-14. Service account 選 Cloud Build 預設 service account。
+14. Service account 選：875659388420-compute@developer.gserviceaccount.com。
 15. 不要勾 Require approval before build executes。
 16. Substitution variables 填：_REGION = us-central1。
 17. 儲存 trigger。
@@ -328,7 +328,7 @@ CD trigger 會跑 `terraform apply`，必須開 approval：
 8. Configuration 選：Cloud Build configuration file。
 9. Location 選：Repository。
 10. Cloud Build configuration file location 填：complete/cloudbuild-deploy.yaml。
-11. Service account 選 Cloud Build 預設 service account，或 production 專用 deploy service account。
+11. Service account 選：875659388420-compute@developer.gserviceaccount.com，或 production 專用 deploy service account。
 12. 勾選 Require approval before build executes。
 13. Substitution variables 填下面這組值。
 14. 儲存 trigger。
@@ -373,6 +373,7 @@ _DATASTREAM_DESIRED_STATE = RUNNING
 - Trigger 建好後，第一次建議用 `Run trigger` 手動跑，不要直接靠 push 自動部署。
 - Approval 前要打開 build detail 看 `terraform-plan` step log，確認沒有非預期 destroy/replace。
 - 如果使用 production 專用 deploy service account，請把 Step 8E 的 IAM roles 綁到那個 service account，而不是預設 Cloud Build service account。
+- Trigger 如果指定 service account，Cloud Build YAML 不能使用 legacy logs 設定；本 repo 的 `complete/cloudbuild.yaml` 和 `complete/cloudbuild-deploy.yaml` 已使用 `options.logging: CLOUD_LOGGING_ONLY`。若看到 `if 'build.service_account' is specified...`，代表 trigger 正在使用舊版 YAML，請先 push 最新 commit 後再重跑。
 - 目前 `cloudbuild-deploy.yaml` 會執行 `terraform apply`。如果只是想測 trigger，不要用 CD trigger，請先跑 `complete/cloudbuild.yaml` 的 CI trigger。
 
 ## Step 8H - CD 後 smoke test
