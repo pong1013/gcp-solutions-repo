@@ -1,0 +1,38 @@
+config {
+  type: "table",
+  schema: "mart",
+  name: "user_segments",
+  tags: ["daily", "ml"],
+  dependencies: ["user_segment_model"]
+}
+
+SELECT
+  CURRENT_DATE() AS run_date,
+  user_id,
+  CONCAT('segment_', CAST(CENTROID_ID AS STRING)) AS segment_name,
+  ROUND(100.0 / (1.0 + NEAREST_CENTROIDS_DISTANCE[OFFSET(0)].DISTANCE), 2) AS segment_score,
+  'user_segment_model' AS model_name,
+  'v1' AS model_version,
+  CURRENT_TIMESTAMP() AS scored_at
+FROM
+  ML.PREDICT(
+    MODEL ${ref("user_segment_model")},
+    (
+      SELECT
+        user_id,
+        CAST(deal_count AS FLOAT64) AS deal_count,
+        CAST(won_deal_count AS FLOAT64) AS won_deal_count,
+        CAST(won_revenue AS FLOAT64) AS won_revenue,
+        CAST(ticket_count AS FLOAT64) AS ticket_count,
+        CAST(open_ticket_count AS FLOAT64) AS open_ticket_count,
+        CAST(avg_csat_score AS FLOAT64) AS avg_csat_score,
+        CAST(campaign_event_count AS FLOAT64) AS campaign_event_count,
+        CAST(high_intent_event_count AS FLOAT64) AS high_intent_event_count,
+        CAST(account_age_days AS FLOAT64) AS account_age_days,
+        CAST(days_since_last_login AS FLOAT64) AS days_since_last_login
+      FROM
+        ${ref("user_segmentation_features")}
+      WHERE
+        user_id IS NOT NULL
+    )
+  )

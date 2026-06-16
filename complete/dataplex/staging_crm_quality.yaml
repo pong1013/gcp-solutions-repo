@@ -1,0 +1,167 @@
+# ============================================================
+# Dataplex Data Quality Rules: staging CRM tables
+# Tables:
+#   complete-498806.staging.stg_crm_sales
+#   complete-498806.staging.stg_crm_support
+#   complete-498806.staging.stg_crm_campaign_events
+#   complete-498806.staging.stg_crm_new_partner_leads
+#   complete-498806.staging.stg_oracle_users
+# Owner: data-engineering
+# Review: PR required before any rule change
+# Note: 每張 table 各有獨立 datascan，這份 YAML 以 stg_crm_sales 為主示範，
+#       其他 table 的 scan 設定格式相同，只需替換 table name 和 rule
+# ============================================================
+
+# ── stg_crm_sales ──────────────────────────────────────────
+
+dataQualitySpec:
+  samplingPercent: 100
+  postScanActions:
+    bigqueryExport:
+      resultsTable: complete-498806.audit.dataplex_quality_results
+
+  rules:
+
+    # ----------------------------------------------------------
+    # stg_crm_sales: Row count > 0
+    # ----------------------------------------------------------
+    - ruleId: stg_crm_sales_row_count_gt_zero
+      description: "stg_crm_sales must have at least 1 row"
+      dimension: COMPLETENESS
+      severity: CRITICAL
+      failureAction: BLOCK_DOWNSTREAM
+      tableConditionExpectation:
+        sqlExpression: "COUNT(*) > 0"
+
+    # ----------------------------------------------------------
+    # stg_crm_sales: deal_id NOT NULL
+    # ----------------------------------------------------------
+    - ruleId: stg_crm_sales_deal_id_not_null
+      description: "deal_id must not be null (primary business key)"
+      dimension: COMPLETENESS
+      severity: CRITICAL
+      failureAction: BLOCK_DOWNSTREAM
+      column: deal_id
+      nonNullExpectation: {}
+
+    # ----------------------------------------------------------
+    # stg_crm_sales: user_id NOT NULL
+    # ----------------------------------------------------------
+    - ruleId: stg_crm_sales_user_id_not_null
+      description: "user_id must not be null"
+      dimension: COMPLETENESS
+      severity: CRITICAL
+      failureAction: BLOCK_DOWNSTREAM
+      column: user_id
+      nonNullExpectation: {}
+
+    # ----------------------------------------------------------
+    # stg_crm_sales: deal_stage 只允許已知值
+    #   SQLX 裡用了 LOWER(TRIM())，所以值應為小寫
+    # ----------------------------------------------------------
+    - ruleId: stg_crm_sales_deal_stage_valid
+      description: "deal_stage must be a known lowercase value"
+      dimension: VALIDITY
+      severity: HIGH
+      failureAction: ALERT_ONLY
+      column: deal_stage
+      rowConditionExpectation:
+        sqlExpression: >
+          deal_stage IN (
+            'won', 'lost', 'in_progress', 'qualified',
+            'proposal', 'negotiation', 'closed'
+          )
+
+    # ----------------------------------------------------------
+    # stg_crm_sales: deal_amount >= 0（NULL 允許）
+    #   SAFE_CAST 後若原始值無法解析會為 NULL，允許
+    # ----------------------------------------------------------
+    - ruleId: stg_crm_sales_deal_amount_non_negative
+      description: "deal_amount must be >= 0 when not null"
+      dimension: VALIDITY
+      severity: MEDIUM
+      failureAction: ALERT_ONLY
+      column: deal_amount
+      rowConditionExpectation:
+        sqlExpression: "deal_amount IS NULL OR deal_amount >= 0"
+
+    # ----------------------------------------------------------
+    # stg_crm_sales: run_date NOT NULL
+    # ----------------------------------------------------------
+    - ruleId: stg_crm_sales_run_date_not_null
+      description: "run_date must not be null (used as pipeline partition key)"
+      dimension: COMPLETENESS
+      severity: CRITICAL
+      failureAction: BLOCK_DOWNSTREAM
+      column: run_date
+      nonNullExpectation: {}
+
+    # ----------------------------------------------------------
+    # stg_crm_sales: ingestion_ts freshness
+    #   ingestion_ts 應在最近 25 小時內，確保是當天跑的 pipeline
+    # ----------------------------------------------------------
+    - ruleId: stg_crm_sales_ingestion_ts_fresh
+      description: "Max ingestion_ts must be within last 25 hours"
+      dimension: TIMELINESS
+      severity: HIGH
+      failureAction: ALERT_ONLY
+      tableConditionExpectation:
+        sqlExpression: "MAX(ingestion_ts) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 25 HOUR)"
+
+---
+# ── stg_oracle_users（單獨 datascan，格式示範）──────────────
+
+# dataQualitySpec:
+#   samplingPercent: 100
+#   postScanActions:
+#     bigqueryExport:
+#       resultsTable: complete-498806.audit.dataplex_quality_results
+#   rules:
+
+    # ----------------------------------------------------------
+    # stg_oracle_users: user_id NOT NULL
+    # ----------------------------------------------------------
+    # - ruleId: stg_oracle_users_user_id_not_null
+    #   description: "user_id must not be null"
+    #   dimension: COMPLETENESS
+    #   severity: CRITICAL
+    #   failureAction: BLOCK_DOWNSTREAM
+    #   column: user_id
+    #   nonNullExpectation: {}
+
+    # ----------------------------------------------------------
+    # stg_oracle_users: email format 合理
+    # ----------------------------------------------------------
+    # - ruleId: stg_oracle_users_email_format
+    #   description: "email must match basic format when not null"
+    #   dimension: VALIDITY
+    #   severity: HIGH
+    #   failureAction: ALERT_ONLY
+    #   column: email
+    #   rowConditionExpectation:
+    #     sqlExpression: >
+    #       email IS NULL
+    #       OR REGEXP_CONTAINS(email, r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+    # ----------------------------------------------------------
+    # stg_oracle_users: user_id 唯一性
+    # ----------------------------------------------------------
+    # - ruleId: stg_oracle_users_user_id_unique
+    #   description: "user_id must be unique"
+    #   dimension: UNIQUENESS
+    #   severity: CRITICAL
+    #   failureAction: BLOCK_DOWNSTREAM
+    #   column: user_id
+    #   uniquenessExpectation: {}
+
+    # ----------------------------------------------------------
+    # stg_oracle_users: consent_email 是 BOOL
+    # ----------------------------------------------------------
+    # - ruleId: stg_oracle_users_consent_email_bool
+    #   description: "consent_email must be true/false/null"
+    #   dimension: VALIDITY
+    #   severity: HIGH
+    #   failureAction: BLOCK_DOWNSTREAM
+    #   column: consent_email
+    #   rowConditionExpectation:
+    #     sqlExpression: "consent_email IS TRUE OR consent_email IS FALSE OR consent_email IS NULL"

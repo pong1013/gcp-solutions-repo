@@ -1,0 +1,48 @@
+{
+  "name": "complete-crm-csv-ingestion",
+  "description": "Schema-driven CRM CSV ingestion with rejected-row evidence for the Complete GCP CRM migration solution.",
+  "parameters": [
+    {
+      "name": "run_date",
+      "label": "Run date",
+      "helpText": "Business run date in YYYY-MM-DD format.",
+      "isOptional": false
+    },
+    {
+      "name": "source_type",
+      "label": "Source type",
+      "helpText": "CRM source type, for example crm_sales or crm_support.",
+      "isOptional": false
+    },
+    {
+      "name": "input_prefix",
+      "label": "Input prefix",
+      "helpText": "GCS prefix containing CRM CSV files for the run date.",
+      "isOptional": false
+    },
+    {
+      "name": "schema_config_path",
+      "label": "Schema config path",
+      "helpText": "GCS path to the source schema config JSON.",
+      "isOptional": false
+    },
+    {
+      "name": "output_table",
+      "label": "Output BigQuery table",
+      "helpText": "Output BigQuery table in project:dataset.table format.",
+      "isOptional": false
+    },
+    {
+      "name": "rejected_output_prefix",
+      "label": "Rejected output prefix",
+      "helpText": "GCS prefix where rejected rows are written as JSONL.",
+      "isOptional": false
+    },
+    {
+      "name": "audit_table",
+      "label": "Audit BigQuery table",
+      "helpText": "Audit BigQuery table in project:dataset.table format.",
+      "isOptional": false
+    }
+  ]
+}

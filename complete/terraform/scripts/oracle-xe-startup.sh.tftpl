@@ -1,0 +1,612 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ID="${project_id}"
+ORACLE_IMAGE="${oracle_docker_image}"
+ORACLE_SERVICE_NAME="${oracle_service_name}"
+ORACLE_PORT="${oracle_port}"
+REPLICATION_USER="${oracle_username}"
+
+LOG_FILE="/var/log/complete-oracle-xe-bootstrap.log"
+BOOTSTRAP_DIR="/opt/complete-oracle-bootstrap"
+MARKER_FILE="$BOOTSTRAP_DIR/bootstrap.complete"
+
+mkdir -p "$BOOTSTRAP_DIR"
+touch "$LOG_FILE"
+chmod 600 "$LOG_FILE"
+
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo "[$(date -Is)] Starting Complete Oracle XE bootstrap."
+
+if [[ -f "$MARKER_FILE" ]]; then
+  echo "[$(date -Is)] Bootstrap marker exists. Ensuring Oracle container is running."
+  docker start complete-oracle-xe || true
+  exit 0
+fi
+
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io jq curl
+systemctl enable docker
+systemctl start docker
+
+metadata_token() {
+  curl -sf -H "Metadata-Flavor: Google" \
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
+    | jq -r '.access_token'
+}
+
+access_secret() {
+  local secret_id="$1"
+  local token
+  token="$(metadata_token)"
+  curl -sf -H "Authorization: Bearer $token" \
+    "https://secretmanager.googleapis.com/v1/projects/$PROJECT_ID/secrets/$secret_id/versions/latest:access" \
+    | jq -r '.payload.data' \
+    | base64 -d
+}
+
+sql_quoted_password() {
+  printf "%s" "$1" | sed 's/"/""/g'
+}
+
+ORACLE_SYS_PASSWORD="$(access_secret oracle-sys-password)"
+ORACLE_APP_PASSWORD="$(access_secret oracle-app-password)"
+ORACLE_REPLICATION_PASSWORD="$(access_secret oracle-password)"
+
+mkdir -p /opt/oracle/oradata
+# The gvenzl/oracle-xe image writes database files as the oracle user
+# inside the container, which uses uid/gid 54321. The host-mounted
+# volume must be writable by that uid or Oracle listener/database startup
+# fails with errno=13 permission denied.
+chown -R 54321:54321 /opt/oracle/oradata
+chmod 775 /opt/oracle/oradata
+
+if docker ps -a --format '{{.Names}}' | grep -qx 'complete-oracle-xe'; then
+  echo "[$(date -Is)] Oracle container already exists. Starting it."
+  docker start complete-oracle-xe >/dev/null || true
+else
+  docker run -d \
+    --name complete-oracle-xe \
+    --restart unless-stopped \
+    -p "$ORACLE_PORT:1521" \
+    -e ORACLE_PASSWORD="$ORACLE_SYS_PASSWORD" \
+    -v /opt/oracle/oradata:/opt/oracle/oradata \
+    "$ORACLE_IMAGE"
+fi
+
+echo "[$(date -Is)] Waiting for Oracle SQL readiness."
+for _ in $(seq 1 120); do
+  if docker exec complete-oracle-xe bash -lc "printf '%s\n' 'SELECT 1 FROM dual;' 'EXIT;' | sqlplus -s / as sysdba" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 10
+done
+
+if ! docker exec complete-oracle-xe bash -lc "printf '%s\n' 'SELECT 1 FROM dual;' 'EXIT;' | sqlplus -s / as sysdba" >/dev/null 2>&1; then
+  echo "Oracle SQL readiness check failed."
+  docker logs complete-oracle-xe
+  exit 1
+fi
+
+current_log_mode="$(docker exec -i complete-oracle-xe bash -lc "sqlplus -s / as sysdba" <<'SQL' | tr -d '[:space:]'
+SET HEADING OFF
+SET FEEDBACK OFF
+SET PAGESIZE 0
+SELECT log_mode FROM v$database;
+EXIT;
+SQL
+)"
+
+if [[ "$current_log_mode" != "ARCHIVELOG" ]]; then
+  echo "[$(date -Is)] Enabling ARCHIVELOG mode."
+  cat > "$BOOTSTRAP_DIR/enable_archivelog.sql" <<'SQL'
+WHENEVER SQLERROR EXIT SQL.SQLCODE
+SHUTDOWN IMMEDIATE;
+STARTUP MOUNT;
+ALTER DATABASE ARCHIVELOG;
+ALTER DATABASE OPEN;
+ALTER PLUGGABLE DATABASE ALL OPEN;
+EXIT;
+SQL
+  chmod 600 "$BOOTSTRAP_DIR/enable_archivelog.sql"
+  docker exec -i complete-oracle-xe bash -lc "sqlplus -s / as sysdba" < "$BOOTSTRAP_DIR/enable_archivelog.sql"
+  shred -u "$BOOTSTRAP_DIR/enable_archivelog.sql" || rm -f "$BOOTSTRAP_DIR/enable_archivelog.sql"
+else
+  echo "[$(date -Is)] ARCHIVELOG mode already enabled."
+fi
+
+APP_PASSWORD_SQL="$(sql_quoted_password "$ORACLE_APP_PASSWORD")"
+REPLICATION_PASSWORD_SQL="$(sql_quoted_password "$ORACLE_REPLICATION_PASSWORD")"
+
+cat > "$BOOTSTRAP_DIR/bootstrap.sql" <<SQL
+WHENEVER SQLERROR EXIT SQL.SQLCODE
+SET SERVEROUTPUT ON
+SET FEEDBACK ON
+SET VERIFY OFF
+
+DECLARE
+  v_log_mode v\$database.log_mode%TYPE;
+BEGIN
+  SELECT log_mode INTO v_log_mode FROM v\$database;
+  DBMS_OUTPUT.PUT_LINE('Current LOG_MODE=' || v_log_mode);
+  IF v_log_mode != 'ARCHIVELOG' THEN
+    RAISE_APPLICATION_ERROR(-20001, 'ARCHIVELOG mode is required before Datastream CDC bootstrap.');
+  END IF;
+END;
+/
+
+ALTER PLUGGABLE DATABASE ALL OPEN;
+ALTER DATABASE ADD SUPPLEMENTAL LOG DATA;
+ALTER DATABASE ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+ALTER SYSTEM SWITCH LOGFILE;
+ALTER SYSTEM ARCHIVE LOG CURRENT;
+
+ALTER SESSION SET "_ORACLE_SCRIPT"=true;
+
+DECLARE
+  v_root_count NUMBER;
+  v_pdb_count NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_root_count
+  FROM cdb_users
+  WHERE username = '$REPLICATION_USER'
+    AND con_id = 1;
+
+  SELECT COUNT(*) INTO v_pdb_count
+  FROM cdb_users u
+  JOIN v\$pdbs p
+    ON p.con_id = u.con_id
+  WHERE u.username = '$REPLICATION_USER'
+    AND p.name = UPPER('$ORACLE_SERVICE_NAME');
+
+  IF v_root_count > 0 AND v_pdb_count = 0 THEN
+    DBMS_OUTPUT.PUT_LINE('Repairing root-only $REPLICATION_USER by recreating it CONTAINER=ALL.');
+    EXECUTE IMMEDIATE 'DROP USER $REPLICATION_USER CASCADE';
+    v_root_count := 0;
+  END IF;
+
+  IF v_root_count = 0 THEN
+    EXECUTE IMMEDIATE 'CREATE USER $REPLICATION_USER IDENTIFIED BY "$REPLICATION_PASSWORD_SQL" CONTAINER=ALL';
+  END IF;
+END;
+/
+
+ALTER USER $REPLICATION_USER IDENTIFIED BY "$REPLICATION_PASSWORD_SQL" ACCOUNT UNLOCK CONTAINER=ALL;
+
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT CONNECT TO $REPLICATION_USER CONTAINER=ALL';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT CREATE SESSION TO $REPLICATION_USER CONTAINER=ALL';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ANY TABLE TO $REPLICATION_USER CONTAINER=ALL';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT_CATALOG_ROLE TO $REPLICATION_USER CONTAINER=ALL';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT EXECUTE_CATALOG_ROLE TO $REPLICATION_USER CONTAINER=ALL';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT LOGMINING TO $REPLICATION_USER CONTAINER=ALL';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE NOT IN (-1927, -1951, -900) THEN
+      RAISE;
+    END IF;
+END;
+/
+
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON GV_\$LOG TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON GV_\$LOGFILE TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON GV_\$ARCHIVED_LOG TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON V_\$ARCHIVED_LOG TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON GV_\$INSTANCE TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON GV_\$STANDBY_LOG TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON V_\$INSTANCE TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON V_\$PDBS TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON V_\$TRANSPORTABLE_PLATFORM TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON V_\$DATABASE TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON V_\$PARAMETER TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON V_\$LOGMNR_CONTENTS TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT EXECUTE ON SYS.DBMS_LOGMNR TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT EXECUTE ON SYS.DBMS_LOGMNR_D TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.COL\$ TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.DBA_OBJECTS TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.DBA_TABLESPACES TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.DBA_SUPPLEMENTAL_LOGGING TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.DBA_ENCRYPTED_COLUMNS TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.DBA_EXTENTS TO $REPLICATION_USER'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF; END;
+/
+
+ALTER SESSION SET CONTAINER=$ORACLE_SERVICE_NAME;
+ALTER SESSION SET "_ORACLE_SCRIPT"=true;
+
+DECLARE
+  v_count NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_count
+  FROM dba_users
+  WHERE username = '$REPLICATION_USER';
+
+  IF v_count = 0 THEN
+    DBMS_OUTPUT.PUT_LINE('Creating $REPLICATION_USER inside $ORACLE_SERVICE_NAME for table access.');
+    EXECUTE IMMEDIATE 'CREATE USER $REPLICATION_USER IDENTIFIED BY "$REPLICATION_PASSWORD_SQL"';
+  END IF;
+END;
+/
+
+ALTER USER $REPLICATION_USER IDENTIFIED BY "$REPLICATION_PASSWORD_SQL" ACCOUNT UNLOCK;
+
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT CONNECT TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT CREATE SESSION TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ANY TABLE TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT EXECUTE_CATALOG_ROLE TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.V_\$DATABASE TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.V_\$PARAMETER TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.V_\$INSTANCE TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.V_\$PDBS TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.V_\$TRANSPORTABLE_PLATFORM TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.GV_\$LOG TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.GV_\$LOGFILE TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.GV_\$ARCHIVED_LOG TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.V_\$ARCHIVED_LOG TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.DBA_SUPPLEMENTAL_LOGGING TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ON SYS.V_\$LOGMNR_CONTENTS TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT EXECUTE ON SYS.DBMS_LOGMNR TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT EXECUTE ON SYS.DBMS_LOGMNR_D TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+
+DECLARE
+  v_count NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_count FROM dba_users WHERE username = 'APP';
+  IF v_count = 0 THEN
+    EXECUTE IMMEDIATE 'CREATE USER APP IDENTIFIED BY "$APP_PASSWORD_SQL"';
+  END IF;
+END;
+/
+
+ALTER USER APP IDENTIFIED BY "$APP_PASSWORD_SQL" ACCOUNT UNLOCK;
+GRANT CONNECT, RESOURCE TO APP;
+ALTER USER APP QUOTA UNLIMITED ON USERS;
+
+BEGIN
+  EXECUTE IMMEDIATE q'[
+    CREATE TABLE APP.USER_RAW (
+      user_id VARCHAR2(20) PRIMARY KEY,
+      email VARCHAR2(120),
+      first_name VARCHAR2(50),
+      last_name VARCHAR2(50),
+      gender VARCHAR2(10),
+      birth_date DATE,
+      city VARCHAR2(50),
+      country VARCHAR2(10),
+      signup_date DATE,
+      consent_email VARCHAR2(1),
+      income_band VARCHAR2(20),
+      last_login_at TIMESTAMP,
+      source_system VARCHAR2(50),
+      updated_at TIMESTAMP
+    )
+  ]';
+EXCEPTION
+  WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN
+      RAISE;
+    END IF;
+END;
+/
+
+MERGE INTO APP.USER_RAW target
+USING (
+  SELECT
+    'U00001' AS user_id,
+    'user00001@example.com' AS email,
+    'First1' AS first_name,
+    'Last1' AS last_name,
+    'M' AS gender,
+    DATE '1987-04-08' AS birth_date,
+    'Taipei' AS city,
+    'TW' AS country,
+    DATE '2025-08-02' AS signup_date,
+    'Y' AS consent_email,
+    'HIGH' AS income_band,
+    SYSTIMESTAMP AS last_login_at,
+    'oracle_gce_vm' AS source_system,
+    SYSTIMESTAMP AS updated_at
+  FROM dual
+) source
+ON (target.user_id = source.user_id)
+WHEN NOT MATCHED THEN INSERT (
+  user_id,
+  email,
+  first_name,
+  last_name,
+  gender,
+  birth_date,
+  city,
+  country,
+  signup_date,
+  consent_email,
+  income_band,
+  last_login_at,
+  source_system,
+  updated_at
+) VALUES (
+  source.user_id,
+  source.email,
+  source.first_name,
+  source.last_name,
+  source.gender,
+  source.birth_date,
+  source.city,
+  source.country,
+  source.signup_date,
+  source.consent_email,
+  source.income_band,
+  source.last_login_at,
+  source.source_system,
+  source.updated_at
+);
+
+COMMIT;
+
+DECLARE
+  v_count NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_count
+  FROM dba_log_groups
+  WHERE owner = 'APP'
+    AND table_name = 'USER_RAW';
+
+  IF v_count = 0 THEN
+    EXECUTE IMMEDIATE 'ALTER TABLE APP.USER_RAW ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS';
+  END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT SELECT ON APP.USER_RAW TO $REPLICATION_USER';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE != -1927 THEN RAISE; END IF;
+END;
+/
+
+DECLARE
+  v_log_mode v\$database.log_mode%TYPE;
+  v_supplemental_min v\$database.supplemental_log_data_min%TYPE;
+  v_supplemental_all v\$database.supplemental_log_data_all%TYPE;
+  v_count NUMBER;
+BEGIN
+  SELECT log_mode, supplemental_log_data_min, supplemental_log_data_all
+  INTO v_log_mode, v_supplemental_min, v_supplemental_all
+  FROM v\$database;
+
+  IF v_log_mode != 'ARCHIVELOG' THEN
+    RAISE_APPLICATION_ERROR(-20002, 'Expected ARCHIVELOG but got ' || v_log_mode);
+  END IF;
+
+  IF v_supplemental_min != 'YES' OR v_supplemental_all != 'YES' THEN
+    RAISE_APPLICATION_ERROR(-20003, 'Expected database supplemental logging to be enabled.');
+  END IF;
+
+  SELECT COUNT(*) INTO v_count
+  FROM dba_users
+  WHERE username = '$REPLICATION_USER'
+    AND account_status = 'OPEN';
+
+  IF v_count = 0 THEN
+    RAISE_APPLICATION_ERROR(-20004, 'Expected $REPLICATION_USER to exist and be OPEN.');
+  END IF;
+
+  SELECT COUNT(*) INTO v_count
+  FROM dba_tab_privs
+  WHERE grantee = '$REPLICATION_USER'
+    AND owner = 'SYS'
+    AND table_name = 'V_\$DATABASE'
+    AND privilege = 'SELECT';
+
+  IF v_count = 0 THEN
+    RAISE_APPLICATION_ERROR(-20007, 'Expected $REPLICATION_USER to have SELECT ON SYS.V_\$DATABASE in $ORACLE_SERVICE_NAME.');
+  END IF;
+
+  SELECT COUNT(*) INTO v_count
+  FROM dba_tab_privs
+  WHERE grantee = '$REPLICATION_USER'
+    AND owner = 'SYS'
+    AND table_name = 'V_\$ARCHIVED_LOG'
+    AND privilege = 'SELECT';
+
+  IF v_count = 0 THEN
+    RAISE_APPLICATION_ERROR(-20008, 'Expected $REPLICATION_USER to have SELECT ON SYS.V_\$ARCHIVED_LOG in $ORACLE_SERVICE_NAME.');
+  END IF;
+
+  SELECT COUNT(*) INTO v_count
+  FROM dba_tab_privs
+  WHERE grantee = '$REPLICATION_USER'
+    AND owner = 'SYS'
+    AND table_name = 'DBA_SUPPLEMENTAL_LOGGING'
+    AND privilege = 'SELECT';
+
+  IF v_count = 0 THEN
+    RAISE_APPLICATION_ERROR(-20009, 'Expected $REPLICATION_USER to have SELECT ON SYS.DBA_SUPPLEMENTAL_LOGGING in $ORACLE_SERVICE_NAME.');
+  END IF;
+
+  SELECT COUNT(*) INTO v_count
+  FROM dba_tab_privs
+  WHERE grantee = '$REPLICATION_USER'
+    AND owner = 'SYS'
+    AND table_name = 'V_\$LOGMNR_CONTENTS'
+    AND privilege = 'SELECT';
+
+  IF v_count = 0 THEN
+    RAISE_APPLICATION_ERROR(-20010, 'Expected $REPLICATION_USER to have SELECT ON SYS.V_\$LOGMNR_CONTENTS in $ORACLE_SERVICE_NAME.');
+  END IF;
+
+  SELECT COUNT(*) INTO v_count
+  FROM dba_tab_privs
+  WHERE grantee = '$REPLICATION_USER'
+    AND owner = 'SYS'
+    AND table_name = 'DBMS_LOGMNR'
+    AND privilege = 'EXECUTE';
+
+  IF v_count = 0 THEN
+    RAISE_APPLICATION_ERROR(-20011, 'Expected $REPLICATION_USER to have EXECUTE ON SYS.DBMS_LOGMNR in $ORACLE_SERVICE_NAME.');
+  END IF;
+
+  SELECT COUNT(*) INTO v_count
+  FROM dba_tab_privs
+  WHERE grantee = '$REPLICATION_USER'
+    AND owner = 'SYS'
+    AND table_name = 'DBMS_LOGMNR_D'
+    AND privilege = 'EXECUTE';
+
+  IF v_count = 0 THEN
+    RAISE_APPLICATION_ERROR(-20012, 'Expected $REPLICATION_USER to have EXECUTE ON SYS.DBMS_LOGMNR_D in $ORACLE_SERVICE_NAME.');
+  END IF;
+
+  SELECT COUNT(*) INTO v_count
+  FROM dba_role_privs
+  WHERE grantee = '$REPLICATION_USER'
+    AND granted_role = 'EXECUTE_CATALOG_ROLE';
+
+  IF v_count = 0 THEN
+    RAISE_APPLICATION_ERROR(-20013, 'Expected $REPLICATION_USER to have EXECUTE_CATALOG_ROLE in $ORACLE_SERVICE_NAME.');
+  END IF;
+
+  SELECT COUNT(*) INTO v_count FROM APP.USER_RAW;
+  IF v_count = 0 THEN
+    RAISE_APPLICATION_ERROR(-20005, 'Expected APP.USER_RAW to contain at least one row.');
+  END IF;
+
+  SELECT COUNT(*) INTO v_count
+  FROM dba_log_groups
+  WHERE owner = 'APP'
+    AND table_name = 'USER_RAW';
+
+  IF v_count = 0 THEN
+    RAISE_APPLICATION_ERROR(-20006, 'Expected APP.USER_RAW supplemental log group.');
+  END IF;
+END;
+/
+
+SELECT LOG_MODE FROM V_\$DATABASE;
+SELECT SUPPLEMENTAL_LOG_DATA_MIN, SUPPLEMENTAL_LOG_DATA_ALL FROM V_\$DATABASE;
+SELECT USERNAME, ACCOUNT_STATUS, COMMON FROM DBA_USERS WHERE USERNAME = '$REPLICATION_USER';
+SELECT GRANTEE, OWNER, TABLE_NAME, PRIVILEGE FROM DBA_TAB_PRIVS WHERE GRANTEE = '$REPLICATION_USER' AND OWNER = 'SYS' AND TABLE_NAME IN ('V_\$DATABASE', 'V_\$ARCHIVED_LOG', 'DBA_SUPPLEMENTAL_LOGGING', 'V_\$LOGMNR_CONTENTS', 'DBMS_LOGMNR', 'DBMS_LOGMNR_D');
+SELECT GRANTEE, GRANTED_ROLE FROM DBA_ROLE_PRIVS WHERE GRANTEE = '$REPLICATION_USER' AND GRANTED_ROLE = 'EXECUTE_CATALOG_ROLE';
+SELECT COUNT(*) AS USER_RAW_ROWS FROM APP.USER_RAW;
+SELECT OWNER, TABLE_NAME, LOG_GROUP_TYPE FROM DBA_LOG_GROUPS WHERE OWNER = 'APP' AND TABLE_NAME = 'USER_RAW';
+EXIT;
+SQL
+
+chmod 600 "$BOOTSTRAP_DIR/bootstrap.sql"
+
+docker exec -i complete-oracle-xe bash -lc "sqlplus -s / as sysdba" < "$BOOTSTRAP_DIR/bootstrap.sql"
+shred -u "$BOOTSTRAP_DIR/bootstrap.sql" || rm -f "$BOOTSTRAP_DIR/bootstrap.sql"
+
+touch "$MARKER_FILE"
+chmod 600 "$MARKER_FILE"
+
+unset ORACLE_SYS_PASSWORD ORACLE_APP_PASSWORD ORACLE_REPLICATION_PASSWORD
+
+echo "[$(date -Is)] Complete Oracle XE bootstrap finished."

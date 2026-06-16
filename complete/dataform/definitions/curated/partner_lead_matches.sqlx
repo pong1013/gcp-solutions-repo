@@ -1,0 +1,33 @@
+config {
+  type: "table",
+  schema: "curated",
+  name: "partner_lead_matches",
+  tags: ["daily", "curated"]
+}
+
+WITH ranked_leads AS (
+  SELECT
+    leads.*,
+    ROW_NUMBER() OVER (
+      PARTITION BY lead_email, partner_name
+      ORDER BY created_at DESC, external_lead_id DESC
+    ) AS lead_rank
+  FROM ${ref("stg_crm_new_partner_leads")} AS leads
+)
+SELECT
+  leads.external_lead_id,
+  leads.lead_email,
+  leads.partner_name,
+  leads.lead_score,
+  leads.utm_source,
+  leads.created_at,
+  leads.opt_in,
+  users.user_id AS matched_user_id,
+  users.consent_email AS matched_user_consent_email,
+  IF(users.user_id IS NULL, 'prospect', 'matched_user') AS identity_status,
+  leads.run_date,
+  CURRENT_TIMESTAMP() AS transformed_at
+FROM ranked_leads AS leads
+LEFT JOIN ${ref("stg_oracle_users")} AS users
+  ON leads.lead_email = users.email
+WHERE leads.lead_rank = 1

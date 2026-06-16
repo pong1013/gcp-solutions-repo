@@ -1,0 +1,22 @@
+{
+  "source_type": "crm_new_partner_leads",
+  "file_pattern": "crm_new_partner_leads_*.csv",
+  "csv": {
+    "has_header": true,
+    "delimiter": ",",
+    "quote": "\""
+  },
+  "columns": [
+    {"name": "external_lead_id", "type": "STRING", "required": true},
+    {"name": "email", "type": "STRING", "required": true},
+    {"name": "partner_name", "type": "STRING", "required": false},
+    {"name": "lead_score", "type": "INTEGER", "required": false},
+    {"name": "utm_source", "type": "STRING", "required": false},
+    {"name": "created_at", "type": "TIMESTAMP", "required": false},
+    {"name": "opt_in", "type": "BOOL", "required": false}
+  ],
+  "reject_policy": {
+    "max_bad_records": 0,
+    "write_bad_rows": true
+  }
+}

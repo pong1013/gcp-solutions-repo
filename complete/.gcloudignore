@@ -1,0 +1,14 @@
+.git
+.gitignore
+**/.terraform/**
+**/.terraform.lock.hcl
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/terraform.tfvars
+**/*.tfplan
+**/tfplan*
+**/__pycache__/**
+**/*.pyc
+**/node_modules/**
+**/.DS_Store
+cloudbuild-deploy.yaml

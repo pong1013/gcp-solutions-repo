@@ -1,0 +1,20 @@
+config {
+  type: "table",
+  schema: "staging",
+  name: "stg_crm_campaign_events",
+  tags: ["daily", "staging"]
+}
+
+SELECT
+  event_id,
+  user_id,
+  campaign_id,
+  LOWER(TRIM(channel)) AS channel,
+  LOWER(TRIM(event_type)) AS event_type,
+  SAFE_CAST(event_ts AS TIMESTAMP) AS event_ts,
+  run_date,
+  source_type,
+  source_file,
+  ingestion_ts
+FROM `complete-498806.raw.crm_campaign_events`
+WHERE run_date IS NOT NULL

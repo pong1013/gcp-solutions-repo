@@ -1,0 +1,21 @@
+{
+  "source_type": "crm_campaign_events",
+  "file_pattern": "crm_campaign_events_*.csv",
+  "csv": {
+    "has_header": true,
+    "delimiter": ",",
+    "quote": "\""
+  },
+  "columns": [
+    {"name": "event_id", "type": "STRING", "required": true},
+    {"name": "user_id", "type": "STRING", "required": true},
+    {"name": "campaign_id", "type": "STRING", "required": true},
+    {"name": "channel", "type": "STRING", "required": false},
+    {"name": "event_type", "type": "STRING", "required": false},
+    {"name": "event_ts", "type": "TIMESTAMP", "required": false}
+  ],
+  "reject_policy": {
+    "max_bad_records": 0,
+    "write_bad_rows": true
+  }
+}

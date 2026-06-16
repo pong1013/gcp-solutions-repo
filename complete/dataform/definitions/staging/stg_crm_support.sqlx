@@ -1,0 +1,20 @@
+config {
+  type: "table",
+  schema: "staging",
+  name: "stg_crm_support",
+  tags: ["daily", "staging"]
+}
+
+SELECT
+  ticket_id,
+  user_id,
+  LOWER(TRIM(priority)) AS priority,
+  LOWER(TRIM(status)) AS status,
+  LOWER(TRIM(category)) AS category,
+  SAFE_CAST(csat_score AS NUMERIC) AS csat_score,
+  run_date,
+  source_type,
+  source_file,
+  ingestion_ts
+FROM `complete-498806.raw.crm_support`
+WHERE run_date IS NOT NULL

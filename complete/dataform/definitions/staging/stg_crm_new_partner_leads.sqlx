@@ -1,0 +1,21 @@
+config {
+  type: "table",
+  schema: "staging",
+  name: "stg_crm_new_partner_leads",
+  tags: ["daily", "staging"]
+}
+
+SELECT
+  external_lead_id,
+  LOWER(TRIM(email)) AS lead_email,
+  LOWER(TRIM(partner_name)) AS partner_name,
+  SAFE_CAST(lead_score AS INT64) AS lead_score,
+  LOWER(TRIM(utm_source)) AS utm_source,
+  SAFE_CAST(created_at AS TIMESTAMP) AS created_at,
+  SAFE_CAST(opt_in AS BOOL) AS opt_in,
+  run_date,
+  source_type,
+  source_file,
+  ingestion_ts
+FROM `complete-498806.raw.crm_new_partner_leads`
+WHERE run_date IS NOT NULL

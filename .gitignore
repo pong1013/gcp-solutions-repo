@@ -18,14 +18,23 @@ __pycache__/
 *.py[cod]
 .DS_Store
 
-# Directories to ignore
-complete/
+# Complete solution is now tracked, but local Terraform state and plans are not.
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/terraform.tfvars
+**/*.tfplan
+**/tfplan*
+complete/terraform/backend.tf
+
 
 # IDE and editor files
 Practice.md
 
 # Documentation
 **/docs/**
+!complete/docs/
+!complete/docs/**
 
 # Terraform local state and cache
 **/.terraform/
@@ -40,6 +49,7 @@ Practice.md
 *.env
 *credentials*
 *secret*
+!complete/terraform/secret_manager.tf
 *key*.json
 
 # OS / editor

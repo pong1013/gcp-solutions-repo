@@ -1,0 +1,21 @@
+{
+  "source_type": "crm_support",
+  "file_pattern": "crm_support_*.csv",
+  "csv": {
+    "has_header": true,
+    "delimiter": ",",
+    "quote": "\""
+  },
+  "columns": [
+    {"name": "ticket_id", "type": "STRING", "required": true},
+    {"name": "user_id", "type": "STRING", "required": true},
+    {"name": "priority", "type": "STRING", "required": false},
+    {"name": "status", "type": "STRING", "required": false},
+    {"name": "category", "type": "STRING", "required": false},
+    {"name": "csat_score", "type": "FLOAT", "required": false}
+  ],
+  "reject_policy": {
+    "max_bad_records": 0,
+    "write_bad_rows": true
+  }
+}

@@ -1,0 +1,20 @@
+project_id      = "complete-498806"
+region          = "us-central1"
+bucket_location = "US"
+
+enable_storage_transfer_job          = true
+crm_transfer_source_root_directory   = "/Users/chienpong/Documents/workspace/cloud-data-engineer/case-study-gcp-crm/local-data-lab-repo/data/crm/2026-05-26"
+crm_transfer_sink_path               = "crm/2026-05-26/"
+crm_transfer_job_status              = "DISABLED"
+enable_oracle_source_vm              = true
+enable_datastream_resources          = true
+oracle_host                          = "10.128.0.2"
+oracle_service_name                  = "XEPDB1"
+oracle_username                      = "C##DATASTREAM"
+datastream_desired_state             = "RUNNING"
+enable_dataflow_crm_ingestion        = true
+enable_dataform_transform            = true
+enable_dataform_release_config       = true
+enable_dataplex_quality              = true
+enable_ml_salesforce_push            = true
+enable_composer_orchestration        = true

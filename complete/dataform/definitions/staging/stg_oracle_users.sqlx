@@ -1,0 +1,24 @@
+config {
+  type: "table",
+  schema: "staging",
+  name: "stg_oracle_users",
+  tags: ["daily", "staging"]
+}
+
+SELECT
+  USER_ID AS user_id,
+  LOWER(TRIM(EMAIL)) AS email,
+  FIRST_NAME AS first_name,
+  LAST_NAME AS last_name,
+  GENDER AS gender,
+  SAFE_CAST(BIRTH_DATE AS DATE) AS birth_date,
+  CITY AS city,
+  COUNTRY AS country,
+  SAFE_CAST(SIGNUP_DATE AS DATE) AS signup_date,
+  CONSENT_EMAIL = 'Y' AS consent_email,
+  INCOME_BAND AS income_band,
+  SAFE_CAST(LAST_LOGIN_AT AS TIMESTAMP) AS last_login_at,
+  SOURCE_SYSTEM AS source_system,
+  SAFE_CAST(UPDATED_AT AS TIMESTAMP) AS updated_at
+FROM `complete-498806.raw.APP_USER_RAW`
+WHERE USER_ID IS NOT NULL

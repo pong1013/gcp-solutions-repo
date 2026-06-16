@@ -1,0 +1,159 @@
+substitutions:
+  _REGION: us-central1
+  _BUCKET_LOCATION: US
+  _TF_STATE_BUCKET: complete-498806-complete-tfstate
+  _TF_STATE_PREFIX: complete/terraform
+  _CRM_TRANSFER_SOURCE_ROOT_DIRECTORY: /Users/chienpong/Documents/workspace/cloud-data-engineer/case-study-gcp-crm/local-data-lab-repo/data/crm/2026-05-26
+  _CRM_TRANSFER_SINK_PATH: crm/2026-05-26/
+  _CRM_TRANSFER_JOB_STATUS: DISABLED
+  _ORACLE_HOST: 10.128.0.2
+  _ORACLE_SERVICE_NAME: XEPDB1
+  _ORACLE_USERNAME: C##DATASTREAM
+  _DATASTREAM_DESIRED_STATE: RUNNING
+  _DATAFLOW_TEMPLATE_IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/complete-dataflow/crm-csv-ingestion:latest
+  _DATAFLOW_TEMPLATE_PATH: gs://${PROJECT_ID}-complete-dataflow-templates/crm-csv-ingestion/template.json
+  _SALESFORCE_IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/complete-jobs/salesforce-job:latest
+
+options:
+  logging: LEGACY
+  dynamic_substitutions: true
+
+steps:
+  - id: terraform-fmt
+    name: hashicorp/terraform:1.10.5
+    dir: complete/terraform
+    entrypoint: sh
+    args:
+      - -ceu
+      - terraform fmt -check *.tf
+
+  - id: terraform-init
+    name: hashicorp/terraform:1.10.5
+    dir: complete/terraform
+    entrypoint: sh
+    args:
+      - -ceu
+      - |
+        cp backend.tf.gcs.example backend.tf
+        terraform init \
+          -backend-config="bucket=${_TF_STATE_BUCKET}" \
+          -backend-config="prefix=${_TF_STATE_PREFIX}"
+
+  - id: terraform-validate
+    name: hashicorp/terraform:1.10.5
+    dir: complete/terraform
+    args:
+      - validate
+
+  - id: terraform-state-preflight
+    name: hashicorp/terraform:1.10.5
+    dir: complete/terraform
+    entrypoint: sh
+    args:
+      - -ceu
+      - |
+        terraform state list | grep -q '^google_bigquery_dataset.raw$'
+        terraform state list | grep -q '^google_storage_bucket.crm\["raw"\]$'
+        terraform state list | grep -q '^google_service_account.dataflow_worker\[0\]$'
+        terraform state list | grep -q '^google_service_account.composer\[0\]$'
+
+  - id: dataflow-flex-template-build
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        gcloud dataflow flex-template build "${_DATAFLOW_TEMPLATE_PATH}" \
+          --project="${PROJECT_ID}" \
+          --image-gcr-path="${_DATAFLOW_TEMPLATE_IMAGE}" \
+          --sdk-language=PYTHON \
+          --flex-template-base-image=PYTHON3 \
+          --metadata-file=complete/dataflow/crm-csv-ingestion/metadata.json \
+          --py-path=complete/dataflow/crm-csv-ingestion \
+          --env=FLEX_TEMPLATE_PYTHON_PY_FILE=main.py \
+          --env=FLEX_TEMPLATE_PYTHON_REQUIREMENTS_FILE=requirements.txt
+
+  - id: salesforce-job-image-build
+    name: gcr.io/cloud-builders/docker
+    dir: complete/cloud-run/salesforce-job
+    args:
+      - build
+      - -t
+      - ${_SALESFORCE_IMAGE}
+      - .
+
+  - id: salesforce-job-image-push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_SALESFORCE_IMAGE}
+
+  - id: terraform-plan
+    name: hashicorp/terraform:1.10.5
+    dir: complete/terraform
+    args:
+      - plan
+      - -out=tfplan
+      - -var=project_id=${PROJECT_ID}
+      - -var=region=$_REGION
+      - -var=bucket_location=$_BUCKET_LOCATION
+      - -var=enable_storage_transfer_job=true
+      - -var=crm_transfer_source_root_directory=$_CRM_TRANSFER_SOURCE_ROOT_DIRECTORY
+      - -var=crm_transfer_sink_path=$_CRM_TRANSFER_SINK_PATH
+      - -var=crm_transfer_job_status=$_CRM_TRANSFER_JOB_STATUS
+      - -var=enable_oracle_source_vm=true
+      - -var=enable_datastream_resources=true
+      - -var=oracle_host=$_ORACLE_HOST
+      - -var=oracle_service_name=$_ORACLE_SERVICE_NAME
+      - -var=oracle_username=$_ORACLE_USERNAME
+      - -var=datastream_desired_state=$_DATASTREAM_DESIRED_STATE
+      - -var=enable_dataflow_crm_ingestion=true
+      - -var=enable_dataform_transform=true
+      - -var=enable_dataform_release_config=true
+      - -var=enable_dataplex_quality=true
+      - -var=enable_ml_salesforce_push=true
+      - -var=enable_composer_orchestration=true
+
+  - id: terraform-apply
+    name: hashicorp/terraform:1.10.5
+    dir: complete/terraform
+    args:
+      - apply
+      - -auto-approve
+      - tfplan
+
+  - id: deploy-composer-dag
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    args:
+      - gcloud
+      - composer
+      - environments
+      - storage
+      - dags
+      - import
+      - --project=${PROJECT_ID}
+      - --location=${_REGION}
+      - --environment=complete-crm-composer
+      - --source=complete/composer/dags/complete_crm_nightly_pipeline.py
+
+  - id: update-salesforce-job-image
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    args:
+      - gcloud
+      - run
+      - jobs
+      - update
+      - salesforce-campaign-push
+      - --project=${PROJECT_ID}
+      - --region=${_REGION}
+      - --image=${_SALESFORCE_IMAGE}
+      - --max-retries=0
+
+artifacts:
+  objects:
+    location: gs://${_TF_STATE_BUCKET}/cloudbuild-artifacts/$BUILD_ID
+    paths:
+      - complete/terraform/tfplan
+
+images:
+  - ${_SALESFORCE_IMAGE}

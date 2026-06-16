@@ -1,0 +1,83 @@
+substitutions:
+  _REGION: us-central1
+  _SALESFORCE_IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/complete-jobs/salesforce-job:ci
+
+options:
+  logging: LEGACY
+  dynamic_substitutions: true
+
+steps:
+  - id: secret-scan
+    name: ubuntu:24.04
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        grep -RInE 'password|secret|token|client_secret|private_key|BEGIN PRIVATE KEY' complete \
+          --exclude-dir=.terraform \
+          --exclude='*.tfstate' \
+          --exclude='*.tfstate.*' \
+          --exclude='*.md' || true
+        if find complete -type f \( -name '*.key' -o -name '*.pem' \) | grep -q .; then
+          echo "Service account key or PEM file found in complete/."
+          exit 1
+        fi
+
+  - id: terraform-fmt
+    name: hashicorp/terraform:1.10.5
+    dir: complete/terraform
+    entrypoint: sh
+    args:
+      - -ceu
+      - terraform fmt -check *.tf
+
+  - id: terraform-validate
+    name: hashicorp/terraform:1.10.5
+    dir: complete/terraform
+    entrypoint: sh
+    args:
+      - -ceu
+      - terraform init -backend=false && terraform validate
+
+  - id: python-compile
+    name: python:3.12-slim
+    entrypoint: python
+    args:
+      - -m
+      - py_compile
+      - complete/dataflow/crm-csv-ingestion/main.py
+      - complete/cloud-run/salesforce-job/main.py
+      - complete/composer/dags/complete_crm_nightly_pipeline.py
+
+  - id: json-yaml-parse
+    name: python:3.12-slim
+    entrypoint: python
+    args:
+      - -c
+      - |
+        import json
+        from pathlib import Path
+        for path in Path("complete/schemas").glob("*.json"):
+            json.loads(path.read_text())
+        json.loads(Path("complete/dataflow/crm-csv-ingestion/metadata.json").read_text())
+        for path in Path("complete/dataplex").glob("*.yaml"):
+            text = path.read_text()
+            if "dataQualitySpec:" not in text or "rules:" not in text:
+                raise SystemExit(f"{path} does not look like a Dataplex data quality rule file")
+
+  - id: dataform-install-and-compile
+    name: node:20-slim
+    dir: complete/dataform
+    entrypoint: sh
+    args:
+      - -ceu
+      - npm install && npx dataform compile
+
+  - id: salesforce-job-container-build
+    name: gcr.io/cloud-builders/docker
+    dir: complete/cloud-run/salesforce-job
+    args:
+      - build
+      - -t
+      - ${_SALESFORCE_IMAGE}
+      - .

@@ -1,0 +1,23 @@
+{
+  "source_type": "crm_sales",
+  "file_pattern": "crm_sales_*.csv",
+  "csv": {
+    "has_header": true,
+    "delimiter": ",",
+    "quote": "\""
+  },
+  "columns": [
+    {"name": "customer_id", "type": "STRING", "required": true},
+    {"name": "user_id", "type": "STRING", "required": true},
+    {"name": "deal_id", "type": "STRING", "required": true},
+    {"name": "deal_stage", "type": "STRING", "required": false},
+    {"name": "deal_amount", "type": "FLOAT", "required": false},
+    {"name": "currency", "type": "STRING", "required": false},
+    {"name": "closed_date", "type": "DATE", "required": false},
+    {"name": "owner_region", "type": "STRING", "required": false}
+  ],
+  "reject_policy": {
+    "max_bad_records": 0,
+    "write_bad_rows": true
+  }
+}

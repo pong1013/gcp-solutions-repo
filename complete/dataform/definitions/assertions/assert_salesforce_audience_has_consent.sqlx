@@ -1,0 +1,8 @@
+config {
+  type: "assertion",
+  tags: ["daily", "quality"]
+}
+
+SELECT *
+FROM ${ref("salesforce_campaign_audience")}
+WHERE consent_status NOT IN ('email_consent', 'partner_opt_in')

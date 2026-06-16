@@ -1,0 +1,11 @@
+config {
+  type: "assertion",
+  tags: ["daily", "quality"]
+}
+
+SELECT
+  user_id,
+  COUNT(*) AS duplicate_count
+FROM ${ref("user_360")}
+GROUP BY user_id
+HAVING COUNT(*) > 1

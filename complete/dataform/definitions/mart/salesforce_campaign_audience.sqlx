@@ -1,0 +1,56 @@
+config {
+  type: "table",
+  schema: "mart",
+  name: "salesforce_campaign_audience",
+  tags: ["daily", "mart", "activation"],
+  dependencies: ["user_segments"]
+}
+
+WITH pipeline_run AS (
+  SELECT COALESCE(MAX(run_date), CURRENT_DATE()) AS run_date
+  FROM ${ref("partner_lead_matches")}
+),
+existing_users AS (
+  SELECT
+    pipeline_run.run_date,
+    'CAMP_MOCK_1' AS campaign_id,
+    u.user_id,
+    u.email AS lead_email,
+    CAST(NULL AS STRING) AS salesforce_contact_id,
+    COALESCE(s.segment_name, 
+      CASE
+        WHEN u.high_intent_event_count >= 2 OR u.won_revenue >= 10000 THEN 'high_value'
+        WHEN u.open_ticket_count > 0 THEN 'support_followup'
+        ELSE 'nurture'
+      END
+    ) AS segment_name,
+    COALESCE(s.segment_score, 
+      CAST(LEAST(100, u.high_intent_event_count * 15 + u.won_deal_count * 20 + u.deal_count * 5) AS FLOAT64)
+    ) AS score,
+    'email_consent' AS consent_status,
+    'ready' AS activation_status,
+    'passed' AS quality_gate_status
+  FROM ${ref("user_360")} AS u
+  CROSS JOIN pipeline_run
+  LEFT JOIN ${ref("user_segments")} AS s
+    ON u.user_id = s.user_id
+  WHERE u.consent_email IS TRUE
+),
+partner_prospects AS (
+  SELECT
+    run_date,
+    'CAMP_MOCK_1' AS campaign_id,
+    matched_user_id AS user_id,
+    lead_email,
+    CAST(NULL AS STRING) AS salesforce_contact_id,
+    IF(lead_score >= 70, 'partner_hot_lead', 'partner_nurture') AS segment_name,
+    CAST(lead_score AS FLOAT64) AS score,
+    'partner_opt_in' AS consent_status,
+    'ready' AS activation_status,
+    'passed' AS quality_gate_status
+  FROM ${ref("partner_lead_matches")}
+  WHERE opt_in IS TRUE
+)
+SELECT * FROM existing_users
+UNION ALL
+SELECT * FROM partner_prospects

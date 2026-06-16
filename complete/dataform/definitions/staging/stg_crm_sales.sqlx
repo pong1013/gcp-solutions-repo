@@ -1,0 +1,22 @@
+config {
+  type: "table",
+  schema: "staging",
+  name: "stg_crm_sales",
+  tags: ["daily", "staging"]
+}
+
+SELECT
+  customer_id,
+  user_id,
+  deal_id,
+  LOWER(TRIM(deal_stage)) AS deal_stage,
+  SAFE_CAST(deal_amount AS NUMERIC) AS deal_amount,
+  currency,
+  SAFE_CAST(closed_date AS DATE) AS closed_date,
+  owner_region,
+  run_date,
+  source_type,
+  source_file,
+  ingestion_ts
+FROM `complete-498806.raw.crm_sales`
+WHERE run_date IS NOT NULL

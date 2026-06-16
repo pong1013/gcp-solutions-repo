@@ -1,0 +1,61 @@
+config {
+  type: "table",
+  schema: "curated",
+  name: "user_360",
+  tags: ["daily", "curated"]
+}
+
+WITH sales AS (
+  SELECT
+    user_id,
+    COUNT(*) AS deal_count,
+    COUNTIF(deal_stage = 'won') AS won_deal_count,
+    SUM(IF(deal_stage = 'won', deal_amount, 0)) AS won_revenue,
+    MAX(closed_date) AS latest_deal_date
+  FROM ${ref("stg_crm_sales")}
+  GROUP BY user_id
+),
+support AS (
+  SELECT
+    user_id,
+    COUNT(*) AS ticket_count,
+    COUNTIF(status != 'closed') AS open_ticket_count,
+    AVG(csat_score) AS avg_csat_score
+  FROM ${ref("stg_crm_support")}
+  GROUP BY user_id
+),
+campaign AS (
+  SELECT
+    user_id,
+    COUNT(*) AS campaign_event_count,
+    COUNTIF(event_type IN ('click', 'purchase')) AS high_intent_event_count,
+    MAX(event_ts) AS latest_campaign_event_ts
+  FROM ${ref("stg_crm_campaign_events")}
+  GROUP BY user_id
+)
+SELECT
+  users.user_id,
+  users.email,
+  users.first_name,
+  users.last_name,
+  users.city,
+  users.country,
+  users.signup_date,
+  users.consent_email,
+  users.income_band,
+  users.last_login_at,
+  COALESCE(sales.deal_count, 0) AS deal_count,
+  COALESCE(sales.won_deal_count, 0) AS won_deal_count,
+  COALESCE(sales.won_revenue, 0) AS won_revenue,
+  sales.latest_deal_date,
+  COALESCE(support.ticket_count, 0) AS ticket_count,
+  COALESCE(support.open_ticket_count, 0) AS open_ticket_count,
+  support.avg_csat_score,
+  COALESCE(campaign.campaign_event_count, 0) AS campaign_event_count,
+  COALESCE(campaign.high_intent_event_count, 0) AS high_intent_event_count,
+  campaign.latest_campaign_event_ts,
+  CURRENT_TIMESTAMP() AS transformed_at
+FROM ${ref("stg_oracle_users")} AS users
+LEFT JOIN sales USING (user_id)
+LEFT JOIN support USING (user_id)
+LEFT JOIN campaign USING (user_id)

@@ -1,0 +1,126 @@
+# ============================================================
+# Dataplex Data Quality Rules: curated.user_360
+# Table: complete-498806.curated.user_360
+# Owner: data-engineering
+# Review: PR required before any rule change
+# ============================================================
+
+dataQualitySpec:
+  samplingPercent: 100  # 全量掃描，不抽樣
+  postScanActions:
+    bigqueryExport:
+      resultsTable: complete-498806.audit.dataplex_quality_results
+
+  rules:
+
+    # ----------------------------------------------------------
+    # 1. Row count > 0
+    #    每次 Dataform 執行後 user_360 不應為空
+    # ----------------------------------------------------------
+    - ruleId: user_360_row_count_gt_zero
+      description: "user_360 table must have at least 1 row after each Dataform run"
+      dimension: COMPLETENESS
+      severity: CRITICAL
+      failureAction: BLOCK_DOWNSTREAM
+      tableConditionExpectation:
+        sqlExpression: "COUNT(*) > 0"
+
+    # ----------------------------------------------------------
+    # 2. user_id NOT NULL
+    #    主要 business key 不可為 null
+    # ----------------------------------------------------------
+    - ruleId: user_360_user_id_not_null
+      description: "user_id must not be null in user_360"
+      dimension: COMPLETENESS
+      severity: CRITICAL
+      failureAction: BLOCK_DOWNSTREAM
+      column: user_id
+      nonNullExpectation: {}
+
+    # ----------------------------------------------------------
+    # 3. email NOT NULL
+    #    email 是 Salesforce activation 的必要欄位
+    # ----------------------------------------------------------
+    - ruleId: user_360_email_not_null
+      description: "email must not be null in user_360"
+      dimension: COMPLETENESS
+      severity: CRITICAL
+      failureAction: BLOCK_DOWNSTREAM
+      column: email
+      nonNullExpectation: {}
+
+    # ----------------------------------------------------------
+    # 4. email format 合理
+    #    必須含有 @ 和 domain，過濾明顯垃圾資料
+    # ----------------------------------------------------------
+    - ruleId: user_360_email_format_valid
+      description: "email must match a basic email format (contains @ and a dot after @)"
+      dimension: VALIDITY
+      severity: HIGH
+      failureAction: ALERT_ONLY
+      column: email
+      rowConditionExpectation:
+        sqlExpression: "REGEXP_CONTAINS(email, r'^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')"
+
+    # ----------------------------------------------------------
+    # 5. user_id 唯一性
+    #    user_360 是 user grain，同一個 user_id 不應重複
+    # ----------------------------------------------------------
+    - ruleId: user_360_user_id_unique
+      description: "user_id must be unique across all rows in user_360"
+      dimension: UNIQUENESS
+      severity: CRITICAL
+      failureAction: BLOCK_DOWNSTREAM
+      column: user_id
+      uniquenessExpectation: {}
+
+    # ----------------------------------------------------------
+    # 6. consent_email 型別正確
+    #    consent_email 必須是 BOOL（true/false），不可為字串或其他型別
+    # ----------------------------------------------------------
+    - ruleId: user_360_consent_email_is_bool
+      description: "consent_email must be a boolean value (true or false)"
+      dimension: VALIDITY
+      severity: HIGH
+      failureAction: BLOCK_DOWNSTREAM
+      column: consent_email
+      rowConditionExpectation:
+        sqlExpression: "consent_email IS TRUE OR consent_email IS FALSE OR consent_email IS NULL"
+
+    # ----------------------------------------------------------
+    # 7. deal_count >= 0
+    #    彙總欄位不應為負數
+    # ----------------------------------------------------------
+    - ruleId: user_360_deal_count_non_negative
+      description: "deal_count must be >= 0"
+      dimension: VALIDITY
+      severity: MEDIUM
+      failureAction: ALERT_ONLY
+      column: deal_count
+      rowConditionExpectation:
+        sqlExpression: "deal_count >= 0"
+
+    # ----------------------------------------------------------
+    # 8. won_revenue >= 0
+    #    贏得的收入不應為負數
+    # ----------------------------------------------------------
+    - ruleId: user_360_won_revenue_non_negative
+      description: "won_revenue must be >= 0"
+      dimension: VALIDITY
+      severity: MEDIUM
+      failureAction: ALERT_ONLY
+      column: won_revenue
+      rowConditionExpectation:
+        sqlExpression: "won_revenue >= 0"
+
+    # ----------------------------------------------------------
+    # 9. transformed_at freshness
+    #    transformed_at 必須在最近 25 小時內，確保資料不是舊跑的
+    # ----------------------------------------------------------
+    - ruleId: user_360_transformed_at_fresh
+      description: "transformed_at must be within the last 25 hours (detect stale Dataform runs)"
+      dimension: TIMELINESS
+      severity: HIGH
+      failureAction: ALERT_ONLY
+      tableConditionExpectation:
+        sqlExpression: "MAX(transformed_at) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 25 HOUR)"

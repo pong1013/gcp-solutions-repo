@@ -1,0 +1,157 @@
+# ============================================================
+# Dataplex Data Quality Rules: mart.salesforce_campaign_audience
+# Table: complete-498806.mart.salesforce_campaign_audience
+# Owner: data-engineering
+# Review: PR required before any rule change
+# ============================================================
+
+dataQualitySpec:
+  samplingPercent: 100
+  postScanActions:
+    bigqueryExport:
+      resultsTable: complete-498806.audit.dataplex_quality_results
+
+  rules:
+
+    # ----------------------------------------------------------
+    # 1. Row count > 0
+    #    每次執行後 audience 不應為空，否則代表 consent filter 有問題
+    # ----------------------------------------------------------
+    - ruleId: sf_audience_row_count_gt_zero
+      description: "salesforce_campaign_audience must have at least 1 row"
+      dimension: COMPLETENESS
+      severity: CRITICAL
+      failureAction: BLOCK_DOWNSTREAM
+      tableConditionExpectation:
+        sqlExpression: "COUNT(*) > 0"
+
+    # ----------------------------------------------------------
+    # 2. consent_status 只允許已知值
+    #    只有 'email_consent' 和 'partner_opt_in' 是合法值
+    #    出現其他值代表 SQLX 邏輯有變動且未審查
+    # ----------------------------------------------------------
+    - ruleId: sf_audience_consent_status_valid
+      description: "consent_status must be 'email_consent' or 'partner_opt_in'"
+      dimension: VALIDITY
+      severity: CRITICAL
+      failureAction: BLOCK_DOWNSTREAM
+      column: consent_status
+      rowConditionExpectation:
+        sqlExpression: "consent_status IN ('email_consent', 'partner_opt_in')"
+
+    # ----------------------------------------------------------
+    # 3. audience_type 只允許已知值
+    # ----------------------------------------------------------
+    - ruleId: sf_audience_type_valid
+      description: "audience_type must be 'existing_user' or a known partner identity status"
+      dimension: VALIDITY
+      severity: HIGH
+      failureAction: ALERT_ONLY
+      column: audience_type
+      rowConditionExpectation:
+        sqlExpression: "audience_type IN ('existing_user', 'matched_user', 'prospect')"
+
+    # ----------------------------------------------------------
+    # 4. user_id 或 lead_email 至少一個不為 null
+    #    Salesforce 必須能識別對象，兩個都 null 無法 activate
+    # ----------------------------------------------------------
+    - ruleId: sf_audience_identifier_not_null
+      description: "At least one of user_id or lead_email must not be null"
+      dimension: COMPLETENESS
+      severity: CRITICAL
+      failureAction: BLOCK_DOWNSTREAM
+      rowConditionExpectation:
+        sqlExpression: "user_id IS NOT NULL OR lead_email IS NOT NULL"
+
+    # ----------------------------------------------------------
+    # 5. lead_email format 合理（當 lead_email 不為 null 時）
+    # ----------------------------------------------------------
+    - ruleId: sf_audience_lead_email_format
+      description: "lead_email must have valid format when not null"
+      dimension: VALIDITY
+      severity: HIGH
+      failureAction: ALERT_ONLY
+      column: lead_email
+      rowConditionExpectation:
+        sqlExpression: >
+          lead_email IS NULL
+          OR REGEXP_CONTAINS(lead_email, r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+    # ----------------------------------------------------------
+    # 6. score 在合理範圍 0–100
+    #    score 是 SQLX 計算的 activation priority，超過 100 代表邏輯問題
+    # ----------------------------------------------------------
+    - ruleId: sf_audience_score_in_range
+      description: "score must be between 0 and 100 inclusive"
+      dimension: VALIDITY
+      severity: MEDIUM
+      failureAction: ALERT_ONLY
+      column: score
+      rowConditionExpectation:
+        sqlExpression: "score >= 0 AND score <= 100"
+
+    # ----------------------------------------------------------
+    # 7. run_date NOT NULL
+    #    run_date 是 pipeline 的 partition key，不可缺漏
+    # ----------------------------------------------------------
+    - ruleId: sf_audience_run_date_not_null
+      description: "run_date must not be null"
+      dimension: COMPLETENESS
+      severity: CRITICAL
+      failureAction: BLOCK_DOWNSTREAM
+      column: run_date
+      nonNullExpectation: {}
+
+    # ----------------------------------------------------------
+    # 8. run_date 不早於 7 天前
+    #    超過 7 天的 audience 可能是 stale run，不應推送 Salesforce
+    # ----------------------------------------------------------
+    - ruleId: sf_audience_run_date_fresh
+      description: "run_date must not be older than 7 days (stale audience guard)"
+      dimension: TIMELINESS
+      severity: HIGH
+      failureAction: BLOCK_DOWNSTREAM
+      tableConditionExpectation:
+        sqlExpression: "MAX(run_date) >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)"
+
+    # ----------------------------------------------------------
+    # 9. segment_name 只允許已知值
+    #    避免新增 segment 卻沒有 review 就進入 Salesforce
+    # ----------------------------------------------------------
+    - ruleId: sf_audience_segment_name_valid
+      description: "segment_name must be a known value defined in SQLX"
+      dimension: VALIDITY
+      severity: HIGH
+      failureAction: ALERT_ONLY
+      column: segment_name
+      rowConditionExpectation:
+        sqlExpression: >
+          segment_name IN (
+            'high_value',
+            'support_followup',
+            'nurture',
+            'partner_hot_lead',
+            'partner_nurture'
+          )
+
+    # ----------------------------------------------------------
+    # 10. (run_date, user_id) 唯一性 ─ existing_user 部分
+    #     同一個 run_date 同一個 user_id 不應出現兩筆 existing_user
+    # ----------------------------------------------------------
+    - ruleId: sf_audience_existing_user_not_duplicate
+      description: "No duplicate (run_date, user_id) for audience_type='existing_user'"
+      dimension: UNIQUENESS
+      severity: HIGH
+      failureAction: BLOCK_DOWNSTREAM
+      tableConditionExpectation:
+        sqlExpression: >
+          (
+            SELECT COUNT(*)
+            FROM (
+              SELECT run_date, user_id, COUNT(*) AS cnt
+              FROM complete-498806.mart.salesforce_campaign_audience
+              WHERE audience_type = 'existing_user' AND user_id IS NOT NULL
+              GROUP BY run_date, user_id
+              HAVING cnt > 1
+            )
+          ) = 0
