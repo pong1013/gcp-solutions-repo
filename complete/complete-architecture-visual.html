@@ -1,0 +1,1245 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Complete CRM GCP Architecture Visual Guide</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1d2430;
+      --muted: #667085;
+      --paper: #f6f7fb;
+      --panel: #ffffff;
+      --line: #d8dee8;
+      --nav: #202734;
+      --blue: #2f6fed;
+      --cyan: #087d8f;
+      --green: #21825c;
+      --amber: #b66500;
+      --red: #bf3b3b;
+      --violet: #7256d8;
+      --slate: #536579;
+      --shadow: 0 14px 38px rgba(29, 36, 48, 0.11);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    code {
+      color: #22324a;
+      background: #f1f4f8;
+      border: 1px solid #e0e6ef;
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-size: 0.92em;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 292px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: var(--nav);
+      color: #ffffff;
+      padding: 22px 18px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+    }
+
+    .brand {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+
+    .brand small {
+      color: #b9c3d4;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .progress {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      overflow: hidden;
+      margin: 14px 0 24px;
+    }
+
+    .progress span {
+      display: block;
+      width: 12.5%;
+      height: 100%;
+      background: #7cc7ff;
+      transition: width 220ms ease;
+    }
+
+    .steps {
+      display: grid;
+      gap: 8px;
+    }
+
+    .step-btn {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: #eaf0f8;
+      border-radius: var(--radius);
+      padding: 12px;
+      text-align: left;
+      cursor: pointer;
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      align-items: start;
+      transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+    }
+
+    .step-btn:hover,
+    .step-btn:focus-visible {
+      background: rgba(255, 255, 255, 0.12);
+      outline: none;
+    }
+
+    .step-btn.active {
+      background: #ffffff;
+      color: #1d2430;
+      border-color: #ffffff;
+      transform: translateX(2px);
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.14);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .step-btn.active .step-num {
+      background: var(--violet);
+      color: #ffffff;
+    }
+
+    .step-title {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .step-subtitle {
+      display: block;
+      color: #b9c3d4;
+      font-size: 12px;
+      margin-top: 3px;
+      line-height: 1.35;
+    }
+
+    .step-btn.active .step-subtitle {
+      color: var(--muted);
+    }
+
+    .main {
+      min-width: 0;
+      padding: 24px;
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .intro h2 {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 40px);
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+
+    .intro p {
+      margin: 9px 0 0;
+      color: var(--muted);
+      line-height: 1.65;
+      max-width: 960px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: var(--radius);
+      display: inline-grid;
+      place-items: center;
+      cursor: pointer;
+      color: var(--ink);
+      box-shadow: 0 4px 14px rgba(29, 36, 48, 0.06);
+    }
+
+    .icon-btn:hover,
+    .icon-btn:focus-visible {
+      border-color: var(--violet);
+      outline: none;
+    }
+
+    .icon-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .icon-btn svg {
+      width: 18px;
+      height: 18px;
+      min-width: 0;
+    }
+
+    .summary-grid,
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .info-card,
+    .result-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 15px;
+      min-width: 0;
+    }
+
+    .info-card h3,
+    .result-card strong {
+      display: block;
+      margin: 0 0 8px;
+      font-size: 14px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    .info-card p,
+    .result-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 13px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.34fr) minmax(350px, 0.66fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }
+
+    .panel-head {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .panel-head h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      background: #ffffff;
+      line-height: 1.2;
+    }
+
+    .status-badge {
+      color: #432c7a;
+      background: #f4edff;
+      border-color: #d6c7ff;
+    }
+
+    .diagram-wrap {
+      padding: 14px;
+      overflow: auto;
+      background:
+        linear-gradient(#eef2f7 1px, transparent 1px),
+        linear-gradient(90deg, #eef2f7 1px, transparent 1px);
+      background-size: 28px 28px;
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+
+    .diagram-wrap > svg {
+      display: block;
+      width: 100%;
+      min-width: 1180px;
+      height: auto;
+    }
+
+    .node rect {
+      fill: #ffffff;
+      stroke: #c7d0dd;
+      stroke-width: 1.3;
+      transition: fill 180ms ease, stroke 180ms ease, filter 180ms ease, opacity 180ms ease;
+    }
+
+    .node text {
+      fill: #1d2430;
+      font-size: 13px;
+      font-weight: 700;
+      pointer-events: none;
+    }
+
+    .node .small {
+      fill: #667085;
+      font-size: 10.4px;
+      font-weight: 600;
+    }
+
+    .node .tiny {
+      fill: #667085;
+      font-size: 9.5px;
+      font-weight: 600;
+    }
+
+    .node.inactive,
+    .flow.inactive {
+      opacity: 0.18;
+    }
+
+    .node.active rect {
+      stroke-width: 2.4;
+      filter: drop-shadow(0 8px 10px rgba(114, 86, 216, 0.18));
+    }
+
+    .legacy.active rect { fill: #f1f3f6; stroke: #6b7280; }
+    .storage.active rect { fill: #e8f2ff; stroke: var(--blue); }
+    .processing.active rect { fill: #ecfbfd; stroke: var(--cyan); }
+    .orchestration.active rect { fill: #f4edff; stroke: var(--violet); }
+    .warehouse.active rect { fill: #eaf8f1; stroke: var(--green); }
+    .quality.active rect { fill: #fff0f0; stroke: var(--red); }
+    .security.active rect { fill: #fff3df; stroke: var(--amber); }
+    .activation.active rect { fill: #edf7ff; stroke: var(--slate); }
+
+    .flow {
+      fill: none;
+      stroke: #b6c0ce;
+      stroke-width: 2.2;
+      marker-end: url(#arrow);
+      transition: stroke 180ms ease, stroke-width 180ms ease, opacity 180ms ease;
+    }
+
+    .flow.active {
+      stroke: var(--violet);
+      stroke-width: 3.4;
+      opacity: 1;
+    }
+
+    .flow.blue.active { stroke: var(--blue); }
+    .flow.green.active { stroke: var(--green); }
+    .flow.warn.active { stroke: var(--red); }
+    .flow.amber.active { stroke: var(--amber); }
+    .flow.cyan.active { stroke: var(--cyan); }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 14px 0;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .detail {
+      display: grid;
+      gap: 14px;
+    }
+
+    .content {
+      padding: 18px;
+    }
+
+    .content h4 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    .content p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .content ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .quote {
+      border-left: 4px solid var(--violet);
+      background: #f6f2ff;
+      padding: 13px 14px;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      color: #3c2a72;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .mapping,
+    .repo-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .map-row {
+      display: grid;
+      grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr);
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: #ffffff;
+    }
+
+    .map-row strong,
+    .repo-item strong {
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .map-row span,
+    .repo-item span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .repo-item {
+      display: grid;
+      gap: 4px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: #ffffff;
+    }
+
+    .callout {
+      margin-top: 14px;
+      border: 1px solid #f0d5a7;
+      background: #fff8ed;
+      color: #6f4600;
+      border-radius: var(--radius);
+      padding: 13px 14px;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    @media (max-width: 1240px) {
+      .summary-grid,
+      .results-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .detail {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 820px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        height: auto;
+      }
+
+      .main {
+        padding: 16px;
+      }
+
+      .topbar,
+      .summary-grid,
+      .detail,
+      .results-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        justify-content: flex-start;
+      }
+
+      .map-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <small>CRM Migration Visual Guide</small>
+        <h1>Complete GCP Architecture</h1>
+      </div>
+      <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+      <nav class="steps" id="steps" aria-label="complete 架構步驟"></nav>
+    </aside>
+
+    <main class="main">
+      <section class="topbar">
+        <div class="intro">
+          <h2>用 production-grade data platform 完整治理 CRM migration</h2>
+          <p>Complete 方案用 Storage Transfer、Datastream、Dataflow、Dataform、Dataplex、Composer、Cloud Run Jobs 和 Cloud Build，把原本 VM nightly scripts 升級成可監控、可重跑、可審查、可品質控管、可 campaign activation 的 GCP data platform。</p>
+        </div>
+        <div class="controls">
+          <button class="icon-btn" id="prevBtn" aria-label="上一個步驟" title="上一個步驟">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="icon-btn" id="nextBtn" aria-label="下一個步驟" title="下一個步驟">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <section class="summary-grid" aria-label="方案摘要">
+        <article class="info-card">
+          <h3>Production Positioning</h3>
+          <p>接受較高固定成本，換取治理、審計、品質閘門、dashboard、task-level rerun 和 template deployment。</p>
+        </article>
+        <article class="info-card">
+          <h3>Core Stack</h3>
+          <p>Storage Transfer、Datastream、Dataflow Flex Template、Dataform、Dataplex、Composer、Cloud Run Jobs、Cloud Build。</p>
+        </article>
+        <article class="info-card">
+          <h3>Operational Surface</h3>
+          <p>Composer DAG 顯示完整 dependency、task logs、失敗定位與單步重跑；BigQuery audit tables 留下 run evidence。</p>
+        </article>
+        <article class="info-card">
+          <h3>Honest Status</h3>
+          <p>Salesforce job 預設 dry-run；正式寫入需明確 trigger conf、Salesforce secrets 與 CampaignMember push 條件。</p>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <div class="panel-head">
+            <h3 id="diagramTitle">Step 1: Governed CRM transfer</h3>
+            <span class="badge" id="stepBadge">Step 1 / 8</span>
+          </div>
+          <div class="legend" aria-label="元件分類">
+            <span><i class="dot" style="background: var(--slate)"></i>Legacy / External</span>
+            <span><i class="dot" style="background: var(--blue)"></i>Storage</span>
+            <span><i class="dot" style="background: var(--cyan)"></i>Processing</span>
+            <span><i class="dot" style="background: var(--violet)"></i>Orchestration</span>
+            <span><i class="dot" style="background: var(--green)"></i>Warehouse</span>
+            <span><i class="dot" style="background: var(--red)"></i>Quality / Audit</span>
+            <span><i class="dot" style="background: var(--amber)"></i>Security / CI/CD</span>
+          </div>
+          <div class="diagram-wrap">
+            <svg viewBox="0 0 1260 790" role="img" aria-labelledby="svgTitle svgDesc">
+              <title id="svgTitle">Complete CRM migration architecture</title>
+              <desc id="svgDesc">Interactive SVG showing the complete CRM migration architecture using Storage Transfer, Datastream, Dataflow, Dataform, Dataplex, Composer, Cloud Run Jobs, and Cloud Build.</desc>
+              <defs>
+                <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L0,6 L9,3 z" fill="currentColor"></path>
+                </marker>
+              </defs>
+
+              <g class="node legacy" data-node="crmCsv" transform="translate(34 58)">
+                <rect width="160" height="78" rx="8"></rect>
+                <text x="16" y="30">On-prem CRM CSV</text>
+                <text class="small" x="16" y="52">nightly export</text>
+              </g>
+              <g class="node legacy" data-node="oracle" transform="translate(34 194)">
+                <rect width="160" height="84" rx="8"></rect>
+                <text x="16" y="30">Oracle VM</text>
+                <text class="small" x="16" y="52">APP.USER_RAW</text>
+                <text class="tiny" x="16" y="69">GCE + Oracle XE</text>
+              </g>
+              <g class="node legacy" data-node="github" transform="translate(34 520)">
+                <rect width="160" height="78" rx="8"></rect>
+                <text x="16" y="30">GitHub PR</text>
+                <text class="small" x="16" y="52">review changes</text>
+              </g>
+
+              <g class="node storage" data-node="storageTransfer" transform="translate(236 52)">
+                <rect width="178" height="90" rx="8"></rect>
+                <text x="16" y="31">Storage Transfer</text>
+                <text class="small" x="16" y="53">Agent Pool + Job</text>
+                <text class="tiny" x="16" y="70">POSIX to GCS</text>
+              </g>
+              <g class="node storage" data-node="gcsRaw" transform="translate(466 36)">
+                <rect width="184" height="78" rx="8"></rect>
+                <text x="16" y="30">GCS Raw</text>
+                <text class="small" x="16" y="52">crm/run_date CSV</text>
+              </g>
+              <g class="node storage" data-node="gcsManifest" transform="translate(466 136)">
+                <rect width="184" height="78" rx="8"></rect>
+                <text x="16" y="30">GCS Manifest</text>
+                <text class="small" x="16" y="52">transfer evidence</text>
+              </g>
+              <g class="node storage" data-node="gcsRejected" transform="translate(466 254)">
+                <rect width="184" height="78" rx="8"></rect>
+                <text x="16" y="30">GCS Rejected</text>
+                <text class="small" x="16" y="52">bad rows JSONL</text>
+              </g>
+              <g class="node storage" data-node="gcsArchive" transform="translate(466 354)">
+                <rect width="184" height="78" rx="8"></rect>
+                <text x="16" y="30">GCS Archive</text>
+                <text class="small" x="16" y="52">retained evidence</text>
+              </g>
+
+              <g class="node security" data-node="secret" transform="translate(236 198)">
+                <rect width="178" height="84" rx="8"></rect>
+                <text x="16" y="30">Secret Manager</text>
+                <text class="small" x="16" y="52">Oracle + Salesforce</text>
+                <text class="tiny" x="16" y="69">no credentials in repo</text>
+              </g>
+              <g class="node processing" data-node="datastream" transform="translate(236 326)">
+                <rect width="178" height="88" rx="8"></rect>
+                <text x="16" y="31">Datastream</text>
+                <text class="small" x="16" y="53">Oracle CDC</text>
+                <text class="tiny" x="16" y="70">private connection</text>
+              </g>
+              <g class="node security" data-node="cloudBuild" transform="translate(236 520)">
+                <rect width="178" height="88" rx="8"></rect>
+                <text x="16" y="31">Cloud Build</text>
+                <text class="small" x="16" y="53">CI / CD configs</text>
+                <text class="tiny" x="16" y="70">plan apply deploy</text>
+              </g>
+              <g class="node security" data-node="terraform" transform="translate(236 648)">
+                <rect width="178" height="78" rx="8"></rect>
+                <text x="16" y="30">Terraform</text>
+                <text class="small" x="16" y="52">remote state</text>
+              </g>
+
+              <g class="node orchestration" data-node="composer" transform="translate(704 52)">
+                <rect width="186" height="104" rx="8"></rect>
+                <text x="16" y="32">Cloud Composer</text>
+                <text class="small" x="16" y="54">Airflow DAG</text>
+                <text class="tiny" x="16" y="72">task dashboard + rerun</text>
+              </g>
+              <g class="node processing" data-node="dataflow" transform="translate(704 212)">
+                <rect width="186" height="94" rx="8"></rect>
+                <text x="16" y="31">Dataflow Flex</text>
+                <text class="small" x="16" y="53">schema-driven CSV</text>
+                <text class="tiny" x="16" y="70">valid + rejected rows</text>
+              </g>
+              <g class="node processing" data-node="dataform" transform="translate(704 372)">
+                <rect width="186" height="94" rx="8"></rect>
+                <text x="16" y="31">Dataform</text>
+                <text class="small" x="16" y="53">SQLX workflows</text>
+                <text class="tiny" x="16" y="70">staging curated mart</text>
+              </g>
+              <g class="node quality" data-node="dataplex" transform="translate(704 528)">
+                <rect width="186" height="94" rx="8"></rect>
+                <text x="16" y="31">Dataplex</text>
+                <text class="small" x="16" y="53">quality scans</text>
+                <text class="tiny" x="16" y="70">block downstream</text>
+              </g>
+              <g class="node activation" data-node="cloudRun" transform="translate(704 668)">
+                <rect width="186" height="84" rx="8"></rect>
+                <text x="16" y="30">Cloud Run Job</text>
+                <text class="small" x="16" y="52">Salesforce push</text>
+                <text class="tiny" x="16" y="69">dry-run by default</text>
+              </g>
+
+              <g class="node warehouse" data-node="bqRaw" transform="translate(954 48)">
+                <rect width="184" height="78" rx="8"></rect>
+                <text x="16" y="30">BigQuery Raw</text>
+                <text class="small" x="16" y="52">CRM + APP_USER_RAW</text>
+              </g>
+              <g class="node warehouse" data-node="bqStaging" transform="translate(954 168)">
+                <rect width="184" height="78" rx="8"></rect>
+                <text x="16" y="30">BigQuery Staging</text>
+                <text class="small" x="16" y="52">standardized SQLX</text>
+              </g>
+              <g class="node warehouse" data-node="bqCurated" transform="translate(954 288)">
+                <rect width="184" height="78" rx="8"></rect>
+                <text x="16" y="30">BigQuery Curated</text>
+                <text class="small" x="16" y="52">user_360</text>
+              </g>
+              <g class="node warehouse" data-node="bqMart" transform="translate(954 408)">
+                <rect width="184" height="84" rx="8"></rect>
+                <text x="16" y="30">BigQuery Mart</text>
+                <text class="small" x="16" y="52">segments + audience</text>
+                <text class="tiny" x="16" y="69">BQ ML input/output</text>
+              </g>
+              <g class="node quality" data-node="bqAudit" transform="translate(954 552)">
+                <rect width="184" height="94" rx="8"></rect>
+                <text x="16" y="31">BigQuery Audit</text>
+                <text class="small" x="16" y="53">runs + quality + rerun</text>
+                <text class="tiny" x="16" y="70">pipeline evidence</text>
+              </g>
+
+              <g class="node processing" data-node="bqml" transform="translate(1170 394)">
+                <rect width="66" height="72" rx="8"></rect>
+                <text x="12" y="30">BQ ML</text>
+                <text class="tiny" x="12" y="50">KMeans</text>
+              </g>
+              <g class="node quality" data-node="alerts" transform="translate(1170 550)">
+                <rect width="66" height="86" rx="8"></rect>
+                <text x="12" y="28">Alerts</text>
+                <text class="tiny" x="12" y="48">Pub/Sub</text>
+                <text class="tiny" x="12" y="64">Monitoring</text>
+              </g>
+              <g class="node activation" data-node="salesforce" transform="translate(1170 676)">
+                <rect width="66" height="76" rx="8"></rect>
+                <text x="12" y="28">SFDC</text>
+                <text class="tiny" x="12" y="49">Campaign</text>
+              </g>
+
+              <path class="flow blue" data-flow="csvToTransfer" d="M194 97 C214 97 216 97 236 97"></path>
+              <path class="flow blue" data-flow="transferToRaw" d="M414 97 C438 94 438 75 466 75"></path>
+              <path class="flow blue" data-flow="transferToManifest" d="M414 111 C438 134 438 175 466 175"></path>
+              <path class="flow blue" data-flow="transferToArchive" d="M414 125 C446 170 424 392 466 393"></path>
+              <path class="flow amber" data-flow="secretToOracle" d="M414 240 C438 240 438 236 466 236"></path>
+              <path class="flow cyan" data-flow="oracleToDatastream" d="M194 236 C214 258 214 365 236 370"></path>
+              <path class="flow amber" data-flow="secretToDatastream" d="M325 282 L325 326"></path>
+              <path class="flow cyan" data-flow="datastreamToRaw" d="M414 370 C642 366 732 90 954 87"></path>
+              <path class="flow" data-flow="composerToManifest" d="M704 102 C670 120 686 175 650 175"></path>
+              <path class="flow" data-flow="composerToDataflow" d="M797 156 L797 212"></path>
+              <path class="flow blue" data-flow="rawToDataflow" d="M650 75 C682 104 670 242 704 258"></path>
+              <path class="flow warn" data-flow="dataflowToRejected" d="M704 258 C672 258 684 293 650 293"></path>
+              <path class="flow green" data-flow="dataflowToRaw" d="M890 258 C922 232 918 87 954 87"></path>
+              <path class="flow warn" data-flow="dataflowToAudit" d="M890 258 C938 338 890 595 954 600"></path>
+              <path class="flow" data-flow="rawToDataform" d="M1046 126 C1046 212 900 344 797 372"></path>
+              <path class="flow green" data-flow="rawToStaging" d="M1046 126 L1046 168"></path>
+              <path class="flow green" data-flow="stagingToCurated" d="M1046 246 L1046 288"></path>
+              <path class="flow green" data-flow="curatedToMart" d="M1046 366 L1046 408"></path>
+              <path class="flow green" data-flow="dataformToLayers" d="M890 419 C918 418 924 329 954 329"></path>
+              <path class="flow warn" data-flow="dataformToAudit" d="M890 433 C924 468 918 600 954 600"></path>
+              <path class="flow warn" data-flow="dataplexToAudit" d="M890 575 C922 575 922 599 954 599"></path>
+              <path class="flow warn" data-flow="dataplexToAlerts" d="M890 575 C1004 575 1054 593 1170 593"></path>
+              <path class="flow" data-flow="composerToDataplex" d="M797 156 C730 250 734 452 797 528"></path>
+              <path class="flow" data-flow="composerToDataform" d="M797 156 C808 234 808 308 797 372"></path>
+              <path class="flow" data-flow="composerToRun" d="M797 156 C874 318 842 534 797 668"></path>
+              <path class="flow warn" data-flow="composerToAudit" d="M890 104 C926 198 904 560 954 600"></path>
+              <path class="flow cyan" data-flow="martToBqml" d="M1138 450 L1170 430"></path>
+              <path class="flow green" data-flow="bqmlToMart" d="M1170 446 L1138 460"></path>
+              <path class="flow" data-flow="martToRun" d="M954 450 C880 478 930 710 890 710"></path>
+              <path class="flow amber" data-flow="secretToRun" d="M414 240 C594 258 562 706 704 710"></path>
+              <path class="flow" data-flow="runToSalesforce" d="M890 710 C1008 732 1058 714 1170 714"></path>
+              <path class="flow warn" data-flow="runToAudit" d="M890 710 C928 705 916 600 954 600"></path>
+              <path class="flow amber" data-flow="githubToBuild" d="M194 559 C214 559 216 559 236 559"></path>
+              <path class="flow amber" data-flow="buildToTerraform" d="M325 608 L325 648"></path>
+              <path class="flow amber" data-flow="terraformToInfra" d="M414 687 C520 660 588 104 704 104"></path>
+              <path class="flow amber" data-flow="buildToComposer" d="M414 559 C528 536 580 107 704 104"></path>
+            </svg>
+          </div>
+        </article>
+
+        <aside class="detail">
+          <article class="panel">
+            <div class="panel-head">
+              <h3>本步驟目的</h3>
+              <span class="badge status-badge" id="statusBadge">已實作</span>
+            </div>
+            <div class="content">
+              <h4 id="stepTitle">Governed CRM transfer</h4>
+              <p id="stepDescription"></p>
+              <ul id="stepBullets"></ul>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h3>處理的需求</h3>
+              <span class="badge" id="mappingBadge">3 items</span>
+            </div>
+            <div class="content mapping" id="mapping"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h3>Repo 對應</h3>
+              <span class="badge" id="repoBadge">2 files</span>
+            </div>
+            <div class="content repo-list" id="repoList"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h3>完成結果</h3>
+              <span class="badge" id="phaseBadge">Foundation</span>
+            </div>
+            <div class="content">
+              <div class="quote" id="outcome"></div>
+            </div>
+          </article>
+        </aside>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h3>整體優化後的結果</h3>
+          <span class="badge">Complete Tradeoff</span>
+        </div>
+        <div class="content">
+          <div class="results-grid">
+            <article class="result-card">
+              <strong>完整治理與審計</strong>
+              <p>每個 pipeline 階段都留下 manifest、audit table、quality result 或 Composer task status，讓 production 問題可追查。</p>
+            </article>
+            <article class="result-card">
+              <strong>可重跑的營運介面</strong>
+              <p>Composer DAG 顯示 dependency、logs 和 failed task，operator 可以針對單一步驟重跑，而不是整條 nightly pipeline 重來。</p>
+            </article>
+            <article class="result-card">
+              <strong>品質閘門阻擋 activation</strong>
+              <p>Dataplex scans 和 Dataform assertions 把壞資料擋在 ML scoring 與 Salesforce push 前，避免 campaign activation 擴大錯誤。</p>
+            </article>
+            <article class="result-card">
+              <strong>可交付 deployment template</strong>
+              <p>Terraform remote state、Cloud Build CI/CD、Flex Template build、DAG import 和 Cloud Run image update 讓方案可 review、可重建。</p>
+            </article>
+          </div>
+          <div class="callout">完成度提醒：complete 是治理最完整、成本最高的方向。Salesforce Cloud Run Job 支援 dry-run 與正式 push path，但 DAG 預設會跳過正式寫入；要真正寫 Salesforce，必須明確設定 `skip_salesforce_write=false`、提供 Campaign ID、放入 Salesforce secrets，並確認 quality gate 已通過。Dataform SQLX 已在 repo 內，production workflow 仍需確保 code 已同步/commit 到 Dataform repository。</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const steps = [
+      {
+        title: "Governed CRM Transfer",
+        short: "Storage Transfer + manifest",
+        phase: "Foundation",
+        status: "已實作 Terraform",
+        diagram: "Step 1: Governed CRM transfer",
+        nodes: ["crmCsv", "storageTransfer", "gcsRaw", "gcsManifest", "gcsArchive", "composer"],
+        flows: ["csvToTransfer", "transferToRaw", "transferToManifest", "transferToArchive", "composerToManifest"],
+        desc: "用 Storage Transfer Service 把 on-prem CRM CSV 穩定送進 GCS raw landing zone，並用 manifest 留下 transfer completion evidence，讓 Composer 能判斷同一個 run_date 是否可進入 Dataflow ingestion。",
+        bullets: [
+          "Terraform 建立 Storage Transfer Agent Pool、nightly transfer job、raw/manifest/archive/rejected buckets 和 IAM。",
+          "raw bucket 放 `crm/<run_date>/`，manifest bucket 放 `manifest/<run_date>/transfer_manifest.json`。",
+          "Composer DAG 的 `validate_crm_arrival` 會確認 manifest 狀態為 SUCCESS、四種 CRM CSV 到齊且檔案非空。",
+          "這一步把原本手動上傳或 VM script 變成可驗證、可稽核的 transfer contract。"
+        ],
+        mapping: [
+          ["Governed landing zone", "raw、manifest、archive、rejected 分 bucket 管理，權限與 retention 邊界更清楚。"],
+          ["Arrival sensing", "後續 pipeline 不只檢查檔案存在，也檢查 transfer manifest 與必要 source type。"],
+          ["Rerun contract", "run_date 成為 Storage Transfer、Dataflow、Composer audit 共用的重跑鍵。"]
+        ],
+        repo: [
+          ["Transfer Terraform", "complete/terraform/storagetransfer.tf"],
+          ["Storage buckets", "complete/terraform/storage.tf"],
+          ["Composer sensor", "complete/composer/dags/complete_crm_nightly_pipeline.py"],
+          ["Runbook", "complete/docs/step1-crm-transfer.md"]
+        ],
+        outcome: "CRM CSV 進入 GCS 前後都有 evidence，pipeline 可以用 manifest 判斷是否安全往下跑。"
+      },
+      {
+        title: "Oracle CDC With Datastream",
+        short: "Oracle to BigQuery raw",
+        phase: "Migration",
+        status: "已實作 Terraform",
+        diagram: "Step 2: Oracle CDC with Datastream",
+        nodes: ["oracle", "secret", "datastream", "bqRaw", "composer"],
+        flows: ["oracleToDatastream", "secretToDatastream", "datastreamToRaw"],
+        desc: "用 GCE Oracle XE 模擬 private source，透過 Datastream private connection 把 Oracle `APP.USER_RAW` 同步到 BigQuery `raw.APP_USER_RAW`，保留正式 migration 的 backfill、CDC 與 schema evolution path。",
+        bullets: [
+          "Secret Manager 管 Oracle host、port、service name、username、password，不把密碼放進 Terraform variables 或 repo。",
+          "Terraform 建 Oracle VM、firewall、Datastream private connection、source/destination profiles 和 stream。",
+          "Datastream stream 目標是 BigQuery raw dataset，讓 Oracle user master 能和 CRM CSV 在 Dataform 階段整合。",
+          "Composer DAG 會用 `wait_for_oracle_datastream_freshness` 確認 raw Oracle table 有可用資料。"
+        ],
+        mapping: [
+          ["Oracle CDC requirement", "不用手動 CSV export 取代正式 Oracle migration，保留 CDC 能力。"],
+          ["Secure connectivity", "private connection、firewall、Secret Manager 分別處理 network 和 credentials。"],
+          ["Shared raw layer", "Oracle CDC 和 CRM CSV 都進 BigQuery raw，後續由 Dataform 統一轉換。"]
+        ],
+        repo: [
+          ["Datastream Terraform", "complete/terraform/datastream.tf"],
+          ["Oracle VM", "complete/terraform/oracle_source_vm.tf"],
+          ["Secrets", "complete/terraform/secret_manager.tf"],
+          ["Runbook", "complete/docs/step2-oracle-datastream.md"]
+        ],
+        outcome: "Oracle 使用者主檔以 CDC 方式進入 BigQuery，支援後續 user_360、consent 和 Salesforce audience。"
+      },
+      {
+        title: "Dataflow CRM Ingestion",
+        short: "schema-driven Flex Template",
+        phase: "Ingestion",
+        status: "已實作 code + Terraform",
+        diagram: "Step 3: Dataflow CRM ingestion",
+        nodes: ["composer", "gcsRaw", "dataflow", "gcsRejected", "bqRaw", "bqAudit"],
+        flows: ["composerToDataflow", "rawToDataflow", "dataflowToRejected", "dataflowToRaw", "dataflowToAudit"],
+        desc: "用同一套 Python Dataflow Flex Template 依 schema config 處理四種 CRM CSV，把 valid rows 寫入 BigQuery raw tables，把 invalid rows 寫到 rejected JSONL，並寫入 ingestion audit。",
+        bullets: [
+          "Flex Template parameters 包含 run_date、source_type、input_prefix、schema_config_path、output_table、rejected_output_prefix、audit_table。",
+          "四種 source type：crm_sales、crm_support、crm_campaign_events、crm_new_partner_leads。",
+          "Schema config 定義欄位型別與 required policy，Dataflow 做型別轉換、required validation、rejected row evidence。",
+          "Composer DAG 會為四種 source type 建四個 ingestion task，支援 task-level failure 和 rerun。"
+        ],
+        mapping: [
+          ["Schema evolution", "新增 CRM file type 時主要新增 schema config 和 raw table definition，而不是複製 pipeline。"],
+          ["Row-level rejection", "壞資料不會靜默消失，rejected bucket 保留原始 row、row number 和 error reasons。"],
+          ["Auditability", "`audit.ingestion_runs` 留下 input_count、valid_count、rejected_count。"]
+        ],
+        repo: [
+          ["Dataflow code", "complete/dataflow/crm-csv-ingestion/main.py"],
+          ["Flex metadata", "complete/dataflow/crm-csv-ingestion/metadata.json"],
+          ["Schemas", "complete/schemas/*.json"],
+          ["Terraform", "complete/terraform/dataflow.tf"]
+        ],
+        outcome: "CRM CSV ingestion 從 ad hoc parsing 升級成 schema-driven、可 rejected、可 audit、可重跑的 Dataflow template。"
+      },
+      {
+        title: "Dataform Transformation",
+        short: "raw to staging curated mart",
+        phase: "Warehouse",
+        status: "已實作 SQLX scaffold",
+        diagram: "Step 4: Dataform transformation",
+        nodes: ["dataform", "bqRaw", "bqStaging", "bqCurated", "bqMart", "bqAudit", "composer"],
+        flows: ["composerToDataform", "rawToDataform", "rawToStaging", "stagingToCurated", "curatedToMart", "dataformToLayers", "dataformToAudit"],
+        desc: "用 Dataform SQLX 把 raw CRM 與 Oracle CDC 資料轉成 staging、curated、mart 三層 business tables，並把 SQL 放進 repo 讓 transformation 可以被 PR review、版本控管和 workflow 重跑。",
+        bullets: [
+          "Terraform 建 Dataform repository、runner service account、staging/curated/mart datasets 和 IAM。",
+          "SQLX 包含 staging cleanup、curated user_360、partner lead matching、mart ML features、segments 和 Salesforce audience。",
+          "Dataform assertions 包含 user_360 uniqueness 與 Salesforce audience consent guard。",
+          "重要邊界：repo 內已有 SQLX，但 production workflow 需確保這些 code 已同步/commit 到 Dataform repository。"
+        ],
+        mapping: [
+          ["Reviewable SQL", "Transformation logic 不再是 Console 裡的一次性 query，而是 repo-managed SQLX。"],
+          ["Business layers", "raw、staging、curated、mart 分層讓資料 lineage 和下游 contract 更清楚。"],
+          ["Workflow execution", "Composer 透過 Dataform API 建 compilation result 並觸發 includedTags daily 的 workflow invocation。"]
+        ],
+        repo: [
+          ["Dataform project", "complete/dataform/"],
+          ["Dataform Terraform", "complete/terraform/dataform.tf"],
+          ["Composer trigger", "complete/composer/dags/complete_crm_nightly_pipeline.py"],
+          ["Runbook", "complete/docs/step4-dataform-transform.md"]
+        ],
+        outcome: "SQL transformation 具備 version control、review、assertions 和 workflow invocation path，但 production 前要確認 Dataform repo 內的 code 已更新。"
+      },
+      {
+        title: "Dataplex Quality Gate",
+        short: "quality before activation",
+        phase: "Quality",
+        status: "已實作 scans + YAML",
+        diagram: "Step 5: Dataplex quality gate",
+        nodes: ["dataplex", "bqCurated", "bqMart", "bqAudit", "alerts", "composer"],
+        flows: ["composerToDataplex", "dataplexToAudit", "dataplexToAlerts", "curatedToMart"],
+        desc: "在 ML scoring 和 Salesforce activation 前，用 Dataplex DataScans 對 curated user_360 與 mart Salesforce audience 執行 quality rules，結果匯出到 BigQuery audit table，並由 Composer quality gate 決定是否阻擋下游。",
+        bullets: [
+          "YAML rules 包含 row count、required fields、email format、uniqueness、freshness、consent 和 audience validity。",
+          "Terraform 將 YAML 轉成 `user-360-quality` 與 `salesforce-audience-quality` Dataplex scans。",
+          "Scan results 匯出到 `audit.dataplex_quality_results`。",
+          "Composer `quality_gate` 查詢近 12 小時 failed rule；只要有 failed_count 就中斷 Salesforce activation。"
+        ],
+        mapping: [
+          ["Governance", "quality rules 放在 repo，可 review、可 audit，不藏在個人 notebook 或手動查詢裡。"],
+          ["Activation guard", "Quality gate 是 Salesforce push 前的煞車，防止錯誤 audience 被啟用。"],
+          ["Manager notification path", "Monitoring alert 和 Pub/Sub topic 提供 failure notification 基礎。"]
+        ],
+        repo: [
+          ["Quality YAML", "complete/dataplex/*.yaml"],
+          ["Dataplex Terraform", "complete/terraform/dataplex.tf"],
+          ["Composer gate", "complete/composer/dags/complete_crm_nightly_pipeline.py"],
+          ["Runbook", "complete/docs/step5-dataplex-quality.md"]
+        ],
+        outcome: "資料品質從報表檢查升級成 pipeline gate，壞資料會擋住 activation 而不是只在事後被發現。"
+      },
+      {
+        title: "ML + Salesforce Activation",
+        short: "BQ ML and guarded push",
+        phase: "Activation",
+        status: "已實作 dry-run 與正式 push path",
+        diagram: "Step 6: ML segmentation and Salesforce activation",
+        nodes: ["dataform", "bqMart", "bqml", "cloudRun", "salesforce", "secret", "bqAudit", "composer"],
+        flows: ["curatedToMart", "martToBqml", "bqmlToMart", "composerToRun", "martToRun", "secretToRun", "runToSalesforce", "runToAudit"],
+        desc: "用 Dataform 管 BigQuery ML segmentation，產生 `mart.salesforce_campaign_audience`，再由 Cloud Run Job 讀取 audience table 做 dry-run validation 或在明確允許時寫入 Salesforce CampaignMember。",
+        bullets: [
+          "SQLX 建 `user_segmentation_features`、`user_segment_model`、`user_segments`、`salesforce_campaign_audience`。",
+          "Cloud Run Job 讀 BigQuery audience，套 consent、quality_gate_status、activation_status filter。",
+          "dry-run 只驗證 payload 並寫 `audit.salesforce_push_runs`，不碰 Salesforce 寫入。",
+          "正式 push 需要 Salesforce client id/secret/login URL secrets，且 DAG trigger conf 必須設定 `skip_salesforce_write=false`。"
+        ],
+        mapping: [
+          ["Campaign activation", "BigQuery ML 與 Salesforce audience 讓資料平台能從分析走到 marketing action。"],
+          ["Consent safety", "Audience SQLX、Dataplex rules 和 job query 都會檢查 consent/activation status。"],
+          ["Production guard", "DAG 預設跳過正式 Salesforce write，避免 nightly pipeline 未審查就自動推 campaign。"]
+        ],
+        repo: [
+          ["ML SQLX", "complete/dataform/definitions/mart/*.sqlx"],
+          ["Salesforce job", "complete/cloud-run/salesforce-job/main.py"],
+          ["Terraform", "complete/terraform/salesforce.tf"],
+          ["Runbook", "complete/docs/step6-ml-salesforce.md"]
+        ],
+        outcome: "ML segmentation 和 Salesforce push path 已接上，但正式寫入必須由 operator 顯式開啟並提供 secrets/campaign 設定。"
+      },
+      {
+        title: "Composer Dashboard And Rerun",
+        short: "Airflow task graph",
+        phase: "Operations",
+        status: "已實作 DAG + Terraform",
+        diagram: "Step 7: Composer dashboard and task-level rerun",
+        nodes: ["composer", "gcsManifest", "dataflow", "datastream", "dataform", "dataplex", "cloudRun", "bqAudit"],
+        flows: ["composerToManifest", "composerToDataflow", "composerToDataform", "composerToDataplex", "composerToRun", "composerToAudit"],
+        desc: "用 Cloud Composer 管完整 pipeline dependency、operator dashboard、logs 和 task-level rerun。Complete 方案選 Composer，是因為客戶需要看得到整條 DAG、定位 failed task，並只重跑失敗步驟。",
+        bullets: [
+          "DAG task graph：validate arrival、四個 Dataflow ingestion、Oracle freshness、Dataform、兩個 Dataplex scans、quality gate、Salesforce dry-run、branch、push/skipped。",
+          "每個 audited task 會寫 `audit.pipeline_step_status`，Terraform 也建立 `audit.rerun_history` table。",
+          "Composer worker service account 取得 Dataflow、Dataform、Dataplex、Cloud Run、BigQuery、GCS、Logging 的最小必要操作權限。",
+          "Composer 是高固定成本服務，complete 使用它是為了 production 操作可視性。"
+        ],
+        mapping: [
+          ["Dashboard requirement", "Airflow UI 顯示 task dependency、logs、狀態和 retry/rerun 操作。"],
+          ["Task-level recovery", "資料工程師可以只重跑失敗的 ingestion、Dataform、quality 或 Salesforce task。"],
+          ["Audit trail", "task_id、try_number、status、started_at、ended_at、message 都寫入 audit table。"]
+        ],
+        repo: [
+          ["DAG", "complete/composer/dags/complete_crm_nightly_pipeline.py"],
+          ["Composer Terraform", "complete/terraform/composer.tf"],
+          ["Runbook", "complete/docs/step7-composer-dashboard.md"]
+        ],
+        outcome: "營運介面從單一 nightly script log 升級成 Airflow DAG，可定位、可重跑、可審計。"
+      },
+      {
+        title: "Terraform + Cloud Build Deployment",
+        short: "reviewable production template",
+        phase: "CI/CD",
+        status: "已實作 CI/CD config",
+        diagram: "Step 8: Terraform and Cloud Build deployment",
+        nodes: ["github", "cloudBuild", "terraform", "dataflow", "cloudRun", "composer", "bqAudit", "secret"],
+        flows: ["githubToBuild", "buildToTerraform", "terraformToInfra", "buildToComposer", "composerToAudit", "secretToRun"],
+        desc: "把 Complete 方案整理成可 review、可重跑、可稽核的 deployment template。Cloud Build CI 做安全與語法檢查；CD build/push artifacts、跑 Terraform plan/apply、部署 Composer DAG、更新 Cloud Run Job image。",
+        bullets: [
+          "`cloudbuild.yaml` 做 secret scan、Terraform fmt/validate、Python compile、JSON/YAML parse、Dataform compile、Salesforce job Docker build。",
+          "`cloudbuild-deploy.yaml` 做 remote backend init、state preflight、Dataflow Flex Template build、Salesforce image build/push、Terraform plan/apply、DAG import、job image update。",
+          "Terraform remote state bucket 避免 Cloud Build 看到空 state 後重建既有資源。",
+          "Production 變更應透過 PR review 和 Cloud Build approval gate，而不是分散在 Console 手動修改。"
+        ],
+        mapping: [
+          ["Review and approval", "infra、DAG、SQLX、Dataflow、Cloud Run code 都能經過 PR 和 CI 檢查。"],
+          ["Repeatable deployment", "同一套 CD config 建 template、更新 image、apply Terraform、import DAG。"],
+          ["No credential leakage", "CI secret scan 和 Secret Manager pattern 避免 token/key 被放進 repo。"]
+        ],
+        repo: [
+          ["CI config", "complete/cloudbuild.yaml"],
+          ["CD config", "complete/cloudbuild-deploy.yaml"],
+          ["Terraform backend", "complete/terraform/backend.tf.gcs.example"],
+          ["Runbook", "complete/docs/step8-template-deployment.md"]
+        ],
+        outcome: "Complete 不只是本機 lab 步驟，而是一套可被 review、可被 Cloud Build 部署、可被 audit 的 production template。"
+      }
+    ];
+
+    let current = 0;
+
+    const els = {
+      steps: document.getElementById("steps"),
+      progressBar: document.getElementById("progressBar"),
+      diagramTitle: document.getElementById("diagramTitle"),
+      stepBadge: document.getElementById("stepBadge"),
+      statusBadge: document.getElementById("statusBadge"),
+      phaseBadge: document.getElementById("phaseBadge"),
+      stepTitle: document.getElementById("stepTitle"),
+      stepDescription: document.getElementById("stepDescription"),
+      stepBullets: document.getElementById("stepBullets"),
+      mapping: document.getElementById("mapping"),
+      mappingBadge: document.getElementById("mappingBadge"),
+      repoList: document.getElementById("repoList"),
+      repoBadge: document.getElementById("repoBadge"),
+      outcome: document.getElementById("outcome"),
+      prevBtn: document.getElementById("prevBtn"),
+      nextBtn: document.getElementById("nextBtn")
+    };
+
+    function createStepButtons() {
+      steps.forEach((step, index) => {
+        const btn = document.createElement("button");
+        btn.className = "step-btn";
+        btn.type = "button";
+        btn.innerHTML = `
+          <span class="step-num">${index + 1}</span>
+          <span>
+            <span class="step-title">${step.title}</span>
+            <span class="step-subtitle">${step.short}</span>
+          </span>
+        `;
+        btn.addEventListener("click", () => setStep(index));
+        els.steps.appendChild(btn);
+      });
+    }
+
+    function setActiveClass(selector, activeList, dataName) {
+      document.querySelectorAll(selector).forEach((el) => {
+        const name = el.dataset[dataName];
+        const active = activeList.includes(name);
+        el.classList.toggle("active", active);
+        el.classList.toggle("inactive", !active);
+      });
+    }
+
+    function appendTextList(parent, items) {
+      parent.innerHTML = "";
+      items.forEach((text) => {
+        const li = document.createElement("li");
+        li.textContent = text;
+        parent.appendChild(li);
+      });
+    }
+
+    function renderMapping(step) {
+      els.mapping.innerHTML = "";
+      step.mapping.forEach(([requirement, decision]) => {
+        const row = document.createElement("div");
+        row.className = "map-row";
+
+        const req = document.createElement("strong");
+        req.textContent = requirement;
+        const text = document.createElement("span");
+        text.textContent = decision;
+
+        row.append(req, text);
+        els.mapping.appendChild(row);
+      });
+      els.mappingBadge.textContent = `${step.mapping.length} items`;
+    }
+
+    function renderRepo(step) {
+      els.repoList.innerHTML = "";
+      step.repo.forEach(([label, path]) => {
+        const item = document.createElement("div");
+        item.className = "repo-item";
+
+        const title = document.createElement("strong");
+        title.textContent = label;
+        const file = document.createElement("span");
+        file.textContent = path;
+
+        item.append(title, file);
+        els.repoList.appendChild(item);
+      });
+      els.repoBadge.textContent = `${step.repo.length} files`;
+    }
+
+    function setStep(index) {
+      current = Math.max(0, Math.min(index, steps.length - 1));
+      const step = steps[current];
+
+      document.querySelectorAll(".step-btn").forEach((btn, i) => btn.classList.toggle("active", i === current));
+
+      els.progressBar.style.width = `${((current + 1) / steps.length) * 100}%`;
+      els.diagramTitle.textContent = step.diagram;
+      els.stepBadge.textContent = `Step ${current + 1} / ${steps.length}`;
+      els.statusBadge.textContent = step.status;
+      els.phaseBadge.textContent = step.phase;
+      els.stepTitle.textContent = step.title;
+      els.stepDescription.textContent = step.desc;
+      els.outcome.textContent = step.outcome;
+
+      appendTextList(els.stepBullets, step.bullets);
+      renderMapping(step);
+      renderRepo(step);
+
+      setActiveClass(".node", step.nodes, "node");
+      setActiveClass(".flow", step.flows, "flow");
+
+      els.prevBtn.disabled = current === 0;
+      els.nextBtn.disabled = current === steps.length - 1;
+    }
+
+    els.prevBtn.addEventListener("click", () => setStep(current - 1));
+    els.nextBtn.addEventListener("click", () => setStep(current + 1));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowLeft") setStep(current - 1);
+      if (event.key === "ArrowRight") setStep(current + 1);
+    });
+
+    createStepButtons();
+    setStep(0);
+  </script>
+</body>
+</html>

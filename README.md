@@ -14,6 +14,7 @@
 
 - [Simplest Architecture Visual Guide](https://pong1013.github.io/gcp-solutions-repo/simplest/simplest-architecture-visual.html)：互動式 HTML，說明 simplest 架構、8 個實作步驟、每一步的目的與需求對應，以及整體優化後的結果。
 - [Cheapest Architecture Visual Guide](https://pong1013.github.io/gcp-solutions-repo/cheapest/cheapest-architecture-visual.html)：互動式 HTML，說明 cheapest 架構、9 個實作步驟、每一步的目的與需求對應，以及低固定成本方案的取捨。
+- [Complete Architecture Visual Guide](https://pong1013.github.io/gcp-solutions-repo/complete/complete-architecture-visual.html)：互動式 HTML，說明 complete 架構、8 個 production-grade 實作步驟、每一步的目的與需求對應，以及完整治理方案的取捨。
 
 ## Layout
 
